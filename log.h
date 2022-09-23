@@ -26,6 +26,8 @@ extern FILE *__LOG_OUT_STREAM;
 #define Cyan    "\033[96m"
 #define Y       "\033[93m"
 #define D       "\033[39m"
+#define Bold    "\033[1m"
+#define Plain   "\033[0m"
 
 
 static inline void current_time (char *buf, size_t buf_size);

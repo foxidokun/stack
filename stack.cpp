@@ -8,12 +8,43 @@ unsigned int stack_verify (const stack_t *stk)
     unsigned int ret = res::OK;
 
     if (stk == nullptr) { return res::NULLPTR; }
-    if (stk->data == POISON_PTR) { ret |= res::POISONED; }
-    if (stk->data == nullptr && (stk->size != 0 || stk->capacity != 0))
-        { ret |= res::OVER_FILLED | BAD_CAPACITY; }
+
     if (stk->size > stk->capacity) { ret |= res::OVER_FILLED; }
     if (stk->capacity < stk->reserved) { ret |= res::BAD_CAPACITY; }
     if (stk->obj_size == 0) { ret |= res::POISONED; };
+
+    if (stk->data == POISON_PTR) { ret |= res::POISONED; }
+    if (stk->data == nullptr && (stk->size != 0 || stk->capacity != 0))
+        { ret |= res::OVER_FILLED | BAD_CAPACITY; }
+
+    if (!(ret & POISONED))
+    {
+        for (size_t n = stk->size; n < stk->capacity; ++n)
+        {
+            for (size_t i = 0; i < stk->obj_size; ++i)
+            {
+                if (((unsigned char *)stk->data)[stk->obj_size*n+i] != POISON_BYTE)
+                {
+                    ret |= res::CORRUPTED;
+                }
+            }
+        }
+
+        bool all_poisoned = (stk->size);
+
+        for (size_t n = 0; n < stk->size; ++n)
+        {
+            for (size_t i = 0; i < stk->obj_size; ++i)
+            {
+                if (((unsigned char *)stk->data)[stk->obj_size*n+i] != POISON_BYTE)
+                {
+                    all_poisoned = false;
+                }
+            }
+        }
+
+        if (all_poisoned) ret |= POISONED;
+    }
 
     return ret;
 }
@@ -21,10 +52,6 @@ unsigned int stack_verify (const stack_t *stk)
 res __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity)
 {
     assert (obj_size > 0 && "object size cant be 0");
-
-    #ifndef NDEBUG
-        if (stk->data != nullptr) { log (log::DBG, "Allocating stack data with not nullptr data pointer"); }
-    #endif
 
     void *mem_ptr = calloc (capacity, obj_size); // Works even with capacity = 0
     if (mem_ptr ==  nullptr) { return res::NOMEM; }
@@ -34,6 +61,10 @@ res __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity)
     stk->reserved = capacity;
     stk->size     = 0;
     stk->obj_size = obj_size;
+
+    #ifndef NDEBUG
+    memset (stk->data, POISON_BYTE, capacity*obj_size);
+    #endif
 
     stack_assert (stk);
 
@@ -60,6 +91,13 @@ res stack_resize (stack_t *stk, size_t new_capacity)
     void *new_data_ptr = realloc (stk->data, new_capacity*stk->obj_size); // Не заполняет нулями
     if (new_data_ptr == nullptr) return res::NOMEM;
 
+    #ifndef NDEBUG
+    if (new_capacity > stk->capacity)
+    {
+        memset ((char* ) new_data_ptr + stk->capacity*stk->obj_size, POISON_BYTE, (new_capacity - stk->capacity)*stk->obj_size);
+    }
+    #endif
+
     stk->data     = new_data_ptr;
     stk->capacity = new_capacity;
 
@@ -67,7 +105,7 @@ res stack_resize (stack_t *stk, size_t new_capacity)
     return res::OK;
 }
 
-res shrink_to_fit (stack_t *stk)
+res stack_shrink_to_fit (stack_t *stk)
 {
     stack_assert (stk);
 
@@ -77,7 +115,7 @@ res shrink_to_fit (stack_t *stk)
     return res::OK;
 }
 
-res pop (stack_t *stk, void *value)
+res stack_pop (stack_t *stk, void *value)
 {
     stack_assert (stk);
     assert (value != nullptr && "pointer can't be NULL");
@@ -88,6 +126,10 @@ res pop (stack_t *stk, void *value)
     }
     stk->size--;
     memcpy (value, (char* ) stk->data + stk->size*stk->obj_size, stk->obj_size);
+
+    #ifndef NDEBUG
+    memset ((char* ) stk->data + stk->size*stk->obj_size, POISON_BYTE, stk->obj_size);
+    #endif
 
     if (stk->capacity>>2 >= stk->size)
     {
@@ -105,7 +147,7 @@ res pop (stack_t *stk, void *value)
     return res::OK;
 }
 
-res push (stack_t *stk, const void *value)
+res stack_push (stack_t *stk, const void *value)
 {
     stack_assert (stk);
     assert (value != nullptr && "pointer can't be null");
@@ -133,6 +175,10 @@ res stack_dtor (stack_t *stk)
 {
     if (stk == nullptr) { return res::OK; }
 
+    #ifndef NDEBUG
+    memset ((char* ) stk->data, POISON_BYTE, stk->obj_size * stk->capacity);
+    #endif
+
     free (stk->data);
 
     #ifndef NDEBUG
@@ -149,7 +195,7 @@ res stack_dtor (stack_t *stk)
 
 void stack_dump (const stack_t *stk, FILE *stream)
 {
-    fprintf (stream, "======== STACK DUMP =======\n");
+    fprintf (stream, R Bold "\n======== STACK DUMP =======\n" Plain D);
 
     if (stk == nullptr)
     {
@@ -158,31 +204,51 @@ void stack_dump (const stack_t *stk, FILE *stream)
     }
     if (stack_verify (stk) & res::POISONED)
     {
-        fprintf (stream, "Stack POISONED\n");
+        fprintf (stream, "Stack " R "POISONED" D "\n");
         return;
     }
 
     #ifndef NDEBUG
-        fprintf (stream, "Stack[%p] with name %s allocated at %s at file %s:(%u)\n",
+        fprintf (stream, "Stack[%p] with name " Bold "%s" Plain 
+            " allocated at " Bold "%s" Plain " at file " Bold "%s:(%u)\n" Plain,
             stk, stk->debug_data->var_name, stk->debug_data->func_name, stk->debug_data->file, stk->debug_data->line
         );
     #else
         fprintf (stream, "Stack[%p]\n", stk);
     #endif
 
-    fprintf (stream, "Parameters: size: %lu capacity: %lu object size: %lu reserved size: %lu\n", stk->size, stk->capacity, stk->obj_size, stk->reserved);
+    fprintf (stream, "Parameters:\n"
+                     "    size: %lu\n"
+                     "    capacity: %lu\n"
+                     "    object size: %lu\n"
+                     "    reserved size: %lu\n\n",
+                     stk->size, stk->capacity, stk->obj_size, stk->reserved);
     fprintf (stream, "Stack data[%p]\n", stk->data);
+
+    bool is_poison = true;
 
     for (size_t i = 0; i < stk->capacity; ++i)
     {
-        if (i<stk->size) fprintf (stream, "* ");
-        else             fprintf (stream, "  ");
+        is_poison = true;
 
-        fprintf (stream, "data[%lu]: ", i);
+        fprintf (stream, "%c data[%03lu]: ", (i<stk->size ? '*' : ' '), i);
         for (size_t j = 0; j < stk->obj_size; ++j)
         {
+            if (((unsigned char *)stk->data)[stk->obj_size*i+j] != POISON_BYTE) 
+            {
+                is_poison = false;
+            }
+
             fprintf (stream, "|0x%08x|", ((unsigned char *)stk->data)[stk->obj_size*i+j]);
         }
+
+        if (is_poison)
+        {
+            fprintf (stream, (i < stk->size) ? R : D "  (POISON)" D); 
+        }
+
         fprintf (stream, "\n");
     }
+
+    fprintf (stream, R Bold "======== END STACK DUMP =======\n\n" Plain D);
 }

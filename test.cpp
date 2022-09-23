@@ -67,10 +67,10 @@ int test_stack_push_pop_no_resize ()
 
     int a = 4, b = 7;
 
-    _ASSERT (push (&stk, &a) == res::OK);
-    _ASSERT (push (&stk, &b) == res::OK);
-    _ASSERT (pop  (&stk, &a) == res::OK);
-    _ASSERT (pop  (&stk, &b) == res::OK);
+    _ASSERT (stack_push (&stk, &a) == res::OK);
+    _ASSERT (stack_push (&stk, &b) == res::OK);
+    _ASSERT (stack_pop  (&stk, &a) == res::OK);
+    _ASSERT (stack_pop  (&stk, &b) == res::OK);
 
     _ASSERT (a == 7);
     _ASSERT (b == 4);
@@ -92,7 +92,7 @@ int test_stack_push_pop_manual_realloc ()
 
     for (int i = 0; i < new_capacity; ++i)
     {
-        _ASSERT (push(&stk, &i) == res::OK);
+        _ASSERT (stack_push(&stk, &i) == res::OK);
     }
 
     _ASSERT (stk.size == new_capacity);
@@ -102,7 +102,7 @@ int test_stack_push_pop_manual_realloc ()
 
     for (int i = new_capacity - 1; i >= 0; --i)
     {
-        _ASSERT (pop(&stk, &poped) == res::OK);
+        _ASSERT (stack_pop(&stk, &poped) == res::OK);
         _ASSERT (poped == i);
     }
 
@@ -119,7 +119,7 @@ int test_stack_push_pop_auto_realloc ()
 
     for (int i = 0; i < new_capacity; ++i)
     {
-        _ASSERT (push(&stk, &i) == res::OK);
+        _ASSERT (stack_push(&stk, &i) == res::OK);
     }
 
     _ASSERT (stk.capacity == 256);
@@ -127,7 +127,7 @@ int test_stack_push_pop_auto_realloc ()
 
     for (int i = new_capacity - 1; i >= 0; --i)
     {
-        _ASSERT (pop(&stk, &poped) == res::OK);
+        _ASSERT (stack_pop(&stk, &poped) == res::OK);
         _ASSERT (poped == i);
     }
 
@@ -140,13 +140,13 @@ int test_stack_push_pop_auto_shrink ()
     stack_t stk = {};
     stack_ctor (&stk, sizeof (int), 16);
 
-    const int new_capacity = 8192;
+    const int new_capacity = 256;
 
     int tmp = 0;
 
     for (size_t i = 0; i < new_capacity; ++i)
     {
-        _ASSERT (push (&stk, &tmp) == res::OK);
+        _ASSERT (stack_push (&stk, &tmp) == res::OK);
     }
 
     _ASSERT (stk.size == new_capacity);
@@ -154,7 +154,7 @@ int test_stack_push_pop_auto_shrink ()
 
     for (size_t i = 8; i < new_capacity; ++i)
     {
-        _ASSERT (pop (&stk, &tmp) == res::OK);
+        _ASSERT (stack_pop (&stk, &tmp) == res::OK);
     }
 
     _ASSERT (stk.capacity == 16);
@@ -162,7 +162,7 @@ int test_stack_push_pop_auto_shrink ()
 
     for (int i = 0; i < 8; ++i)
     {
-        _ASSERT (pop (&stk, &tmp) == res::OK);
+        _ASSERT (stack_pop (&stk, &tmp) == res::OK);
     }
 
     _ASSERT (stk.capacity == 16);

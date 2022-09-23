@@ -9,6 +9,8 @@
 const unsigned char __const_memory_val = 228;
 const void *const POISON_PTR = &__const_memory_val;
 
+const unsigned char POISON_BYTE = (unsigned char) -7u;
+
 #define UNWRAP(val) { if (val != res::OK) { return val; } }
 
 enum res
@@ -19,7 +21,8 @@ enum res
     POISONED        = 1<<2,
     NOMEM           = 1<<3,
     EMPTY           = 1<<4,
-    BAD_CAPACITY    = 1<<5
+    BAD_CAPACITY    = 1<<5,
+    CORRUPTED       = 1<<6
 };
 
 #ifndef NDEBUG
@@ -54,17 +57,17 @@ res __stack_ctor_with_debug (stack_t *stk, const stack_debug_t *debug_data,
 
 #ifndef NDEBUG
 
-    #define stack_ctor(stk, obj_size, ...)                                  \
-    {                                                                       \
-        const static stack_debug_t debug_info = {__PRETTY_FUNCTION__, __FILE__,    \
-                                            #stk, __LINE__};                \
-        __stack_ctor_with_debug (stk, &debug_info, obj_size, ##__VA_ARGS__);\
+    #define stack_ctor(stk, obj_size, ...)                                          \
+    {                                                                               \
+        const static stack_debug_t debug_info = {__PRETTY_FUNCTION__, __FILE__,     \
+                                            #stk, __LINE__};                        \
+        __stack_ctor_with_debug (stk, &debug_info, obj_size, ##__VA_ARGS__);        \
     }
 
 #else
 
     #define stack_ctor(stk, obj_size, ...)                  \
-    {                                                       \
+    {                                                        \
         __stack_ctor(stk, obj_size, ##__VA_ARGS__);           \
     }
 
@@ -72,11 +75,11 @@ res __stack_ctor_with_debug (stack_t *stk, const stack_debug_t *debug_data,
 
 res stack_resize (stack_t *stk, size_t new_capacity);
 
-res shrink_to_fit (stack_t *stk);
+res stack_shrink_to_fit (stack_t *stk);
 
-res push (stack_t *stk, const void *value);
+res stack_push (stack_t *stk, const void *value);
 
-res pop (stack_t *stk, void *value);
+res stack_pop (stack_t *stk, void *value);
 
 res stack_dtor (stack_t *stk);
 

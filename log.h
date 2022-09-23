@@ -76,6 +76,8 @@ void set_log_level (log level);
  */
 void set_log_stream (FILE *stream);
 
+FILE *get_log_stream ();
+
 /**
  * @brief      Write current time in HH:MM:SS format to given buffer
  *

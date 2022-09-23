@@ -21,3 +21,8 @@ void set_log_stream (FILE *stream)
 
     __LOG_OUT_STREAM = stream;
 }
+
+FILE *get_log_stream ()
+{
+    return __LOG_OUT_STREAM;
+}

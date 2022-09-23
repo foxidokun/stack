@@ -45,10 +45,10 @@ static inline void current_time (char *buf, size_t buf_size);
         current_time (__GLOBAL_TIME_BUF, __GLOBAL_TIME_BUF_SIZE);       \
         fprintf (__LOG_OUT_STREAM, "%s ", __GLOBAL_TIME_BUF);           \
                                                                         \
-        if      (lvl == log::DBG) { printf ("DEBUG"); }                 \
-        else if (lvl == log::INF) { printf (Cyan "INFO " D); }          \
-        else if (lvl == log::WRN) { printf (Y "WARN " D); }             \
-        else if (lvl == log::ERR) { printf (R "ERROR" D); }             \
+        if      (lvl == log::DBG) { fprintf (__LOG_OUT_STREAM, "DEBUG"); }                 \
+        else if (lvl == log::INF) { fprintf (__LOG_OUT_STREAM, Cyan "INFO " D); }          \
+        else if (lvl == log::WRN) { fprintf (__LOG_OUT_STREAM, Y "WARN " D); }             \
+        else if (lvl == log::ERR) { fprintf (__LOG_OUT_STREAM, R "ERROR" D); }             \
                                                                         \
         fprintf (__LOG_OUT_STREAM, " [" __FILE__ ":%d] ", __LINE__);    \
         fprintf (__LOG_OUT_STREAM, __VA_ARGS__);                        \

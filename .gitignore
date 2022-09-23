@@ -1,0 +1,14 @@
+.idea
+CMakeLists.txt
+cmake-build-debug
+obj
+bin
+tmp.txt
+docs/
+report*
+out.txt
+*.log
+*.bak
+*.map
+*.data
+*.txt

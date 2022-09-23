@@ -48,9 +48,10 @@ struct stack_t
 
 res __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity = 0);
 
+#ifndef NDEBUG
 res __stack_ctor_with_debug (stack_t *stk, const stack_debug_t *debug_data,
                                 size_t obj_size, size_t capacity = 0);
-
+#endif
 
 #ifndef NDEBUG
 
@@ -65,7 +66,7 @@ res __stack_ctor_with_debug (stack_t *stk, const stack_debug_t *debug_data,
 
     #define stack_ctor(stk, obj_size, ...)                  \
     {                                                       \
-        __stack_ctor(stk, obj_size, ##__VA_ARGS);           \
+        __stack_ctor(stk, obj_size, ##__VA_ARGS__);           \
     }
 
 #endif

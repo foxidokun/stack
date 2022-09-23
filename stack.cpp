@@ -40,6 +40,7 @@ res __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity)
     return res::OK;
 }
 
+#ifndef NDEBUG
 res __stack_ctor_with_debug (stack_t *stk, const stack_debug_t *debug_data,
                                 size_t obj_size, size_t capacity)
 {
@@ -49,6 +50,7 @@ res __stack_ctor_with_debug (stack_t *stk, const stack_debug_t *debug_data,
 
     return __stack_ctor (stk, obj_size, capacity);
 }
+#endif
 
 res stack_resize (stack_t *stk, size_t new_capacity)
 {

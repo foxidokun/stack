@@ -13,12 +13,11 @@ enum class log
     ERR = 4,
 };
 
-const size_t __GLOBAL_TIME_BUF_SIZE = 10;
+const size_t __TIME_BUF_SIZE = 10;
 
 #ifndef __LOG_CPP
 extern log __LOG_LEVEL;
 extern FILE *__LOG_OUT_STREAM;
-extern char __GLOBAL_TIME_BUF[];
 #endif
 
 
@@ -42,8 +41,9 @@ static inline void current_time (char *buf, size_t buf_size);
 {                                                                       \
     if (lvl >= __LOG_LEVEL)                                             \
     {                                                                   \
-        current_time (__GLOBAL_TIME_BUF, __GLOBAL_TIME_BUF_SIZE);       \
-        fprintf (__LOG_OUT_STREAM, "%s ", __GLOBAL_TIME_BUF);           \
+        char time_buf[__TIME_BUF_SIZE] = "";                            \
+        current_time (time_buf, __TIME_BUF_SIZE);                       \
+        fprintf (__LOG_OUT_STREAM, "%s ", time_buf);                    \
                                                                         \
         if      (lvl == log::DBG) { fprintf (__LOG_OUT_STREAM, "DEBUG"); }                 \
         else if (lvl == log::INF) { fprintf (__LOG_OUT_STREAM, Cyan "INFO " D); }          \

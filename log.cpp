@@ -8,8 +8,6 @@
 log __LOG_LEVEL = log::WRN;
 FILE *__LOG_OUT_STREAM = stdout;
 
-char __GLOBAL_TIME_BUF[__GLOBAL_TIME_BUF_SIZE] = "";
-
 void set_log_level (log level)
 {
     __LOG_LEVEL = level;

@@ -9,8 +9,8 @@ unsigned int stack_verify (const stack_t *stk)
 
     if (stk == nullptr) { return res::NULLPTR; }
     if (stk->data == POISON_PTR) { ret |= res::POISONED; }
-    if (stk->data == nullptr && stk->size != 0 && stk->capacity != 0)
-        { ret |= res::OVER_FILLED; }
+    if (stk->data == nullptr && (stk->size != 0 || stk->capacity != 0))
+        { ret |= res::OVER_FILLED | BAD_CAPACITY; }
     if (stk->size > stk->capacity) { ret |= res::OVER_FILLED; }
     if (stk->capacity < stk->reserved) { ret |= res::BAD_CAPACITY; }
     if (stk->obj_size == 0) { ret |= res::POISONED; };
@@ -32,7 +32,7 @@ res __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity)
     stk->data     = mem_ptr;
     stk->capacity = capacity;
     stk->reserved = capacity;
-    stk->size = 0;
+    stk->size     = 0;
     stk->obj_size = obj_size;
 
     stack_assert (stk);
@@ -172,6 +172,7 @@ void stack_dump (const stack_t *stk, FILE *stream)
 
     fprintf (stream, "Parameters: size: %lu capacity: %lu object size: %lu reserved size: %lu\n", stk->size, stk->capacity, stk->obj_size, stk->reserved);
     fprintf (stream, "Stack data[%p]\n", stk->data);
+
     for (size_t i = 0; i < stk->capacity; ++i)
     {
         if (i<stk->size) fprintf (stream, "* ");

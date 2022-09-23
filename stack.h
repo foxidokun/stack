@@ -56,7 +56,7 @@ res __stack_ctor_with_debug (stack_t *stk, const stack_debug_t *debug_data,
 
     #define stack_ctor(stk, obj_size, ...)                                  \
     {                                                                       \
-        const stack_debug_t debug_info = {__PRETTY_FUNCTION__, __FILE__,    \
+        const static stack_debug_t debug_info = {__PRETTY_FUNCTION__, __FILE__,    \
                                             #stk, __LINE__};                \
         __stack_ctor_with_debug (stk, &debug_info, obj_size, ##__VA_ARGS__);\
     }
@@ -93,7 +93,7 @@ unsigned int stack_verify (const stack_t *stk);
         if (check_res != res::OK)                               \
         {                                                       \
             log(log::ERR,                                       \
-                "Failed stack check with err flags: %u",        \
+                "Failed stack check with err flags: 0x%x",      \
                                             check_res);         \
             stack_dump(stk, get_log_stream());                  \
             assert (0 && "Bad stack, check logs");              \

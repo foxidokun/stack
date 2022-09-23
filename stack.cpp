@@ -139,6 +139,7 @@ res stack_dtor (stack_t *stk)
         stk->size     = -1u;
         stk->capacity =   0;
         stk->obj_size =   0;
+        stk->reserved = -1u;
     #endif
 
     return res::OK;
@@ -146,11 +147,16 @@ res stack_dtor (stack_t *stk)
 
 void stack_dump (const stack_t *stk, FILE *stream)
 {
-    fprintf (stream, "STACK DUMP\n");
+    fprintf (stream, "======== STACK DUMP =======\n");
 
     if (stk == nullptr)
     {
-        fprintf (stream, "Stack \n");
+        fprintf (stream, "Stack ptr is nullptr\n");
+        return;
+    }
+    if (stack_verify (stk) & res::POISONED)
+    {
+        fprintf (stream, "Stack POISONED\n");
         return;
     }
 
@@ -162,17 +168,17 @@ void stack_dump (const stack_t *stk, FILE *stream)
         fprintf (stream, "Stack[%p]\n", stk);
     #endif
 
-    fprintf (stream, "Parameters: size: %lu capacity: %lu object size: %lu\n", stk->size, stk->capacity, stk->obj_size);
+    fprintf (stream, "Parameters: size: %lu capacity: %lu object size: %lu reserved size: %lu\n", stk->size, stk->capacity, stk->obj_size, stk->reserved);
     fprintf (stream, "Stack data[%p]\n", stk->data);
     for (size_t i = 0; i < stk->capacity; ++i)
     {
         if (i<stk->size) fprintf (stream, "* ");
         else             fprintf (stream, "  ");
 
-        fprintf (stream, "data[%p]: ", stk->data);
+        fprintf (stream, "data[%lu]: ", i);
         for (size_t j = 0; j < stk->obj_size; ++j)
         {
-            fprintf (stream, "|%08x|", ((unsigned char *)stk->data)[stk->obj_size*i+j]);
+            fprintf (stream, "|0x%08x|", ((unsigned char *)stk->data)[stk->obj_size*i+j]);
         }
         fprintf (stream, "\n");
     }

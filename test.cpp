@@ -10,25 +10,26 @@
 {                                                               \
     if (cond)                                                   \
     {                                                           \
-        printf (R "Test FAILED: %s\n\n" D, #cond);              \
+        log (log::ERR, R "Test FAILED: %s" D, #cond);       \
         failed++;                                               \
     }                                                           \
     else                                                        \
     {                                                           \
-        printf (G "Test OK:     %s\n\n" D, #cond);              \
+        log (log::INF, G "Test OK:     %s" D, #cond);       \
         success++;                                              \
     }                                                           \
 }
 
-#define _ASSERT(cond)                                                           \
-{                                                                               \
-    if (!(cond))                                                                \
-    {                                                                           \
-        printf (R "## Test Error: %s##\n" D, __func__);                         \
-        printf ("Condition check failed: %s\n", #cond);                         \
-        printf ("Test location: File: %s Line: %d\n", __FILE__, __LINE__);      \
-        return -1;                                                              \
-    }                                                                           \
+#define _ASSERT(cond)                                           \
+{                                                               \
+    if (!(cond))                                                \
+    {                                                           \
+        log (log::ERR, R "## Test Error: %s##\n" D              \
+                        "Condition check failed: %s\n"          \
+                        "Test location: File: %s Line: %d",     \
+                        __func__, #cond, __FILE__, __LINE__);   \
+        return -1;                                              \
+    }                                                           \
 }
 
 // ----- TESTS ------
@@ -179,7 +180,7 @@ void run_tests ()
     unsigned int success = 0;
     unsigned int failed  = 0;
 
-    printf ("Starting tests...\n\n");
+    log (log::INF, "Starting tests...");
 
     _TEST (test_stack_ctor_notinit ());
     _TEST (test_stack_ctor_init ());
@@ -188,6 +189,6 @@ void run_tests ()
     _TEST (test_stack_push_pop_auto_realloc ());
     _TEST (test_stack_push_pop_auto_shrink ());
 
-    printf ("Tests total: %u, failed %u, success: %u, success ratio: %3.1lf%%\n",
+    log (log::INF, "Tests total: %u, failed %u, success: %u, success ratio: %3.1lf%%",
         failed + success, failed, success, success * 100.0 / (success + failed));
 }

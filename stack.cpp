@@ -3,21 +3,23 @@
 #include "log.h"
 #include "stack.h"
 
-int stack_verify (const stack_t *stk)
+unsigned int stack_verify (const stack_t *stk)
 {
-    if (stk == nullptr) { return res::NULLPTR & res::OK; }
-    if (stk->data == POISON_PTR) { return res::POISONED; }
-    if (stk->data == nullptr && stk->size != 0 && stk->capacity != 0)
-        { return res::OVER_FILLED; }
-    if (stk->size > stk->capacity) { return res::OVER_FILLED; }
-    if (stk->obj_size == 0) { return res::POISONED; };
+    unsigned int ret = res::OK;
 
-    return res::OK;
+    if (stk == nullptr) { return res::NULLPTR; }
+    if (stk->data == POISON_PTR) { ret |= res::POISONED; }
+    if (stk->data == nullptr && stk->size != 0 && stk->capacity != 0)
+        { ret |= res::OVER_FILLED; }
+    if (stk->size > stk->capacity) { ret |= res::OVER_FILLED; }
+    if (stk->capacity < stk->reserved) { ret |= res::BAD_CAPACITY; }
+    if (stk->obj_size == 0) { ret |= res::POISONED; };
+
+    return ret;
 }
 
 res __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity)
 {
-    stack_assert (stk);
     assert (obj_size > 0 && "object size cant be 0");
 
     #ifndef NDEBUG
@@ -29,12 +31,23 @@ res __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity)
 
     stk->data     = mem_ptr;
     stk->capacity = capacity;
+    stk->reserved = capacity;
     stk->size = 0;
     stk->obj_size = obj_size;
 
     stack_assert (stk);
 
     return res::OK;
+}
+
+res __stack_ctor_with_debug (stack_t *stk, const stack_debug_t *debug_data,
+                                size_t obj_size, size_t capacity)
+{
+    assert (stk != nullptr && "pointer can't be NULL");
+
+    stk->debug_data = debug_data;
+
+    return __stack_ctor (stk, obj_size, capacity);
 }
 
 res stack_resize (stack_t *stk, size_t new_capacity)
@@ -74,9 +87,16 @@ res pop (stack_t *stk, void *value)
     stk->size--;
     memcpy (value, (char* ) stk->data + stk->size*stk->obj_size, stk->obj_size);
 
-    if (stk->capacity>>2 > stk->size)
+    if (stk->capacity>>2 >= stk->size)
     {
-        UNWRAP (stack_resize (stk, stk->capacity>>1));
+        if (stk->capacity>>1 > stk->reserved)
+        {
+            UNWRAP (stack_resize (stk, stk->capacity>>1));
+        }
+        else
+        {
+            UNWRAP (stack_resize (stk, stk->reserved));
+        }
     }
 
     stack_assert (stk);
@@ -113,10 +133,13 @@ res stack_dtor (stack_t *stk)
 
     free (stk->data);
 
-    // Poisoning
-    stk->size     = -1u;
-    stk->capacity =   0;
-    stk->obj_size =   0;
+    #ifndef NDEBUG
+        // Poisoning
+        stk->data     = const_cast<void *>(POISON_PTR); // Write to POISON_PTR is SegFault, but this is main idea of poisoning
+        stk->size     = -1u;
+        stk->capacity =   0;
+        stk->obj_size =   0;
+    #endif
 
     return res::OK;
 }
@@ -132,15 +155,15 @@ void stack_dump (const stack_t *stk, FILE *stream)
     }
 
     #ifndef NDEBUG
-        fprintf (stream, "Stack[%p] with name %s allocated at %s at file %s:(%d)",
+        fprintf (stream, "Stack[%p] with name %s allocated at %s at file %s:(%u)\n",
             stk, stk->debug_data->var_name, stk->debug_data->func_name, stk->debug_data->file, stk->debug_data->line
         );
     #else
-        fprintf (stream, "Stack[%p]", stk);
+        fprintf (stream, "Stack[%p]\n", stk);
     #endif
 
     fprintf (stream, "Parameters: size: %lu capacity: %lu object size: %lu\n", stk->size, stk->capacity, stk->obj_size);
-    fprintf (stream, "Stack data[%p]", stk->data);
+    fprintf (stream, "Stack data[%p]\n", stk->data);
     for (size_t i = 0; i < stk->capacity; ++i)
     {
         if (i<stk->size) fprintf (stream, "* ");

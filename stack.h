@@ -7,7 +7,9 @@
 #include "log.h"
 
 const unsigned char __const_memory_val = 228;
-const void *POISON_PTR = &__const_memory_val;
+const void *const POISON_PTR = &__const_memory_val;
+
+typedef unsigned int err_flags;
 
 #define UNWRAP(val) { if (val != res::OK) { return val; } }
 
@@ -18,7 +20,8 @@ enum res
     OVER_FILLED     = 1<<1,
     POISONED        = 1<<2,
     NOMEM           = 1<<3,
-    EMPTY           = 1<<4
+    EMPTY           = 1<<4,
+    BAD_CAPACITY    = 1<<5
 };
 
 struct stack_debug_t
@@ -36,28 +39,26 @@ struct stack_t
     size_t size;
     size_t capacity;
     size_t obj_size;
+    size_t reserved;
 
     #ifndef NDEBUG
-    stack_debug_t *debug_data;
+    const stack_debug_t *debug_data;
     #endif
 };
 
-res __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity);
+res __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity = 0);
+
+res __stack_ctor_with_debug (stack_t *stk, const stack_debug_t *debug_data,
+                                size_t obj_size, size_t capacity = 0);
+
 
 #ifndef NDEBUG
 
-    #define stack_ctor(stk, obj_size, ...)                          \
-    {                                                               \
-        res retcode = __stack_ctor(stk, obj_size, ##__VA_ARGS__);   \
-        if (retcode != res::OK) { return retcode; }                 \
-                                                                    \
-        stk->debug_data = calloc (1, sizeof (stack_debug_t));       \
-        if (stk->debug_data == nullptr) { return res::NOMEM; }      \
-                                                                    \
-        stk->debug_data.func_name = __PRETTY_FUNCTION__;            \
-        stk->debug_data.file = __FILE__;                            \
-        stk->debug_data.var_name = #stk;                            \
-        stk->debug_data.line = __LINE__;                            \
+    #define stack_ctor(stk, obj_size, ...)                                  \
+    {                                                                       \
+        const stack_debug_t debug_info = {__PRETTY_FUNCTION__, __FILE__,    \
+                                            #stk, __LINE__};                \
+        __stack_ctor_with_debug (stk, &debug_info, obj_size, ##__VA_ARGS__);\
     }
 
 #else
@@ -81,19 +82,22 @@ res stack_dtor (stack_t *stk);
 
 void stack_dump (const stack_t *stk, FILE *stream);
 
-int stack_verify (const stack_t *stk);
+unsigned int stack_verify (const stack_t *stk);
 
 
 #ifndef NDEBUG
 
-    #define stack_assert(stk)                           \
-    {                                                   \
-        if (stack_verify(stk) != res::OK)               \
-        {                                               \
-            fprintf (get_log_stream(), "Failed stack check at %s at file %s:(%d)", __func__, __FILE__, __LINE__); \
-            stack_dump(stk, get_log_stream());          \
-            assert (0 && "Bad stack, check logs");      \
-        }                                               \
+    #define stack_assert(stk)                                   \
+    {                                                           \
+        unsigned int check_res = stack_verify(stk);             \
+        if (check_res != res::OK)                               \
+        {                                                       \
+            log(log::ERR,                                       \
+                "Failed stack check with err flags: %u",        \
+                                            check_res);         \
+            stack_dump(stk, get_log_stream());                  \
+            assert (0 && "Bad stack, check logs");              \
+        }                                                       \
     }                                   
 
 #else

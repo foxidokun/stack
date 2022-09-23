@@ -9,8 +9,6 @@
 const unsigned char __const_memory_val = 228;
 const void *const POISON_PTR = &__const_memory_val;
 
-typedef unsigned int err_flags;
-
 #define UNWRAP(val) { if (val != res::OK) { return val; } }
 
 enum res
@@ -24,6 +22,7 @@ enum res
     BAD_CAPACITY    = 1<<5
 };
 
+#ifndef NDEBUG
 struct stack_debug_t
 {
     const char *const func_name;
@@ -31,7 +30,7 @@ struct stack_debug_t
     const char *const var_name;
     unsigned int line;
 };
-
+#endif
 
 struct stack_t
 {

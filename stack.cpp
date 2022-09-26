@@ -66,7 +66,7 @@ err_flags stack_verify (const stack_t *stk)
     if (stk->data == nullptr)           ret |= res::DATA_NULL;
 
     #ifndef NDEBUG 
-        if (stk->print_func == nullptr) ret |= res::INVALID_FUNC;
+        if (stk->print_func == nullptr) ret &= res::INVALID_FUNC;
     #endif
 
     data_poison_check (stk, &ret);
@@ -556,7 +556,7 @@ static void memory_check (const stack_t *stk, err_flags *errs)
         {
             if (memcmp (stk, stk->struct_copy, sizeof (stack_t)) != 0)
             {
-                *errs |= STRUCT_CORRUPTED;
+                *errs &= STRUCT_CORRUPTED;
             }
         }
     #endif
@@ -662,7 +662,7 @@ static inline void update_hash (stack_t *stk)
     #if STACK_HASH_PROTECT
         stk->struct_hash = 0;
         stk->data_hash   = stk->hash_func (stk->data, stk->capacity * stk->obj_size);
-        stk->struct_hash = stk->hash_func (stk, sizeof (stack_t));
+        stk->struct_hash = stk->hash_func (stk, stk->obj_size);
 
         #if STACK_MEMORY_PROTECT
             unlock_copy (stk);

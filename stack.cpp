@@ -28,7 +28,7 @@ static inline void   lock_copy (stack_t *stk);
 static inline void unlock_data (stack_t *stk);
 static inline void   lock_data (stack_t *stk);
 
-static inline void update_hash   (stack_t *stk);
+static inline void update_hash (stack_t *stk);
 
 static void dungeon_master_check (const stack_t *stk, err_flags *errs);
 static void data_poison_check    (const stack_t *stk, err_flags *errs);
@@ -44,10 +44,16 @@ static void init_dungeon_master_protection (stack_t *stk);
 // ---- ---- ---- --- IMPLEMENTATIONS ---- ---- ---- ----
 
 #if STACK_HASH_PROTECT
-err_flags stack_verify (stack_t *stk_mutable) { // We need not const stk for hash
+
+err_flags stack_verify (stack_t *stk_mutable) // We need mutable stk for hash
+{ 
     const stack_t *stk = (const stack_t *) stk_mutable;
+
 #else
-err_flags stack_verify (const stack_t *stk) {
+
+err_flags stack_verify (const stack_t *stk)
+{
+
 #endif
 
     err_flags ret = res::OK;
@@ -177,6 +183,7 @@ err_flags stack_resize (stack_t *stk, size_t new_capacity)
 
     stk->data     = new_data_ptr;
     stk->capacity = new_capacity;
+
     #if STACK_MEMORY_PROTECT
         unlock_copy (stk);
         stk->struct_copy->data     = stk->data;
@@ -383,7 +390,7 @@ void stack_dump (stack_t *stk, FILE *stream)
 
             if (is_poison) fprintf (stream, "%s (POISON)" D, (i < stk->size) ? R : Cyan);
         #endif   
-         
+
         fputc ('\n', stream);
     }
 

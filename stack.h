@@ -6,14 +6,21 @@
 #include <assert.h>
 #include "log.h"
 
+enum PROTECTION
+{
+    POISON          = 1<<0,
+    DUNGEON_GUARD   = 1<<1,
+    HASH            = 1<<2
+};
+
+const int __PROTECTION_LEVEL = (POISON & DUNGEON_GUARD & HASH);
+
 const unsigned char __const_memory_val = 228;
 const void *const POISON_PTR = &__const_memory_val;
 const unsigned char POISON_BYTE = (unsigned char) -7u;
 
 typedef unsigned char err_flags;
 typedef void (*elem_print_f) (void *elem, size_t elem_size, FILE *stream);
-
-#define UNWRAP(val) { if (val != res::OK) { return val; } }
 
 enum res
 {
@@ -114,5 +121,7 @@ void byte_fprintf(void *elem, size_t elem_size, FILE *stream);
     #define stack_assert(stk) {;}
 
 #endif
+
+#define UNWRAP(val) { if (val != res::OK) { return val; } }
 
 #endif // STACK_H

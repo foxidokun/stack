@@ -1,19 +1,17 @@
+#define STACK_CPP
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
 #include "log.h"
 #include "stack.h"
 
-#define POISON_PROTECT            1
-#define DUNGEON_MASTER_PROTECT    1
-#define HASH_PROTECT              1
-
 const unsigned char __const_memory_val = 228;
 const void *const POISON_PTR = &__const_memory_val;
 const unsigned char POISON_BYTE = (unsigned char) -7u;
 
 typedef uint64_t dungeon_master_t;
-const dungeon_master_t dungeon_master_val = 0x300B4CC;
+const dungeon_master_t dungeon_master_val = 0x1000DEAD7;
 
 err_flags stack_verify (const stack_t *stk)
 {
@@ -24,18 +22,18 @@ err_flags stack_verify (const stack_t *stk)
     if (stk->size > stk->capacity) { ret |= res::OVER_FILLED; }
     if (stk->capacity < stk->reserved) { ret |= res::BAD_CAPACITY; }
 
-    #if POISON_PROTECT
+    #if STACK_KSP_PROTECT
         if (stk->obj_size == 0) { ret |= res::POISONED; };
     #endif
 
     if (stk->data == nullptr && (stk->size != 0 || stk->capacity != 0))
         { ret |= res::OVER_FILLED | BAD_CAPACITY; }
 
-    #if POISON_PROTECT
+    #if STACK_KSP_PROTECT
         data_poison_check (stk);
     #endif
 
-    #if DUNGEON_MASTER_PROTECT
+    #if STACK_DUNGEON_MASTER_PROTECT
         if (((dungeon_master_t *)stk->data)[-1] != dungeon_master_val)
         {
             ret |= DATA_CORRUPTED;
@@ -90,7 +88,7 @@ err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity, elem_pri
 {
     assert (obj_size > 0 && "object size cant be 0");
 
-    #if DUNGEON_MASTER_PROTECT
+    #if STACK_DUNGEON_MASTER_PROTECT
         void *mem_ptr = calloc (capacity*obj_size + 2*sizeof (dungeon_master_t), 1);
     #else
         void *mem_ptr = calloc (capacity, obj_size); // Works even with capacity = 0
@@ -107,11 +105,11 @@ err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity, elem_pri
     if (print_func != nullptr)  stk->print_func = print_func;
     else                        stk->print_func = byte_fprintf;
 
-    #if POISON_PROTECT
+    #if STACK_KSP_PROTECT
         memset (stk->data, POISON_BYTE, capacity*obj_size);
     #endif
 
-    #if DUNGEON_MASTER_PROTECT
+    #if STACK_DUNGEON_MASTER_PROTECT
         *(dungeon_master_t*)stk->data = dungeon_master_val;
         stk->data = (dungeon_master_t*)stk->data + 1;
         * (dungeon_master_t *) ((char *)stk->data + stk->capacity * stk->obj_size) = dungeon_master_val;
@@ -139,11 +137,11 @@ err_flags stack_resize (stack_t *stk, size_t new_capacity)
     stack_assert (stk);
     assert (stk->size <= new_capacity);
 
-    #if DUNGEON_MASTER_PROTECT
+    #if STACK_DUNGEON_MASTER_PROTECT
         stk->data = ((dungeon_master_t*) stk->data) - 1;
     #endif
 
-    #if DUNGEON_MASTER_PROTECT
+    #if STACK_DUNGEON_MASTER_PROTECT
         void *new_data_ptr = realloc (stk->data, new_capacity*stk->obj_size + 2*sizeof (dungeon_master_t)); // Не заполняет нулями
     #else
         void *new_data_ptr = realloc (stk->data, new_capacity*stk->obj_size); // Не заполняет нулями
@@ -151,12 +149,12 @@ err_flags stack_resize (stack_t *stk, size_t new_capacity)
 
     if (new_data_ptr == nullptr) return res::NOMEM;
 
-    #if DUNGEON_MASTER_PROTECT
+    #if STACK_DUNGEON_MASTER_PROTECT
         new_data_ptr = ((dungeon_master_t*) new_data_ptr) + 1;
         * ((dungeon_master_t *) ((char *)new_data_ptr + new_capacity * stk->obj_size)) = dungeon_master_val;
     #endif
 
-    #if POISON_PROTECT
+    #if STACK_KSP_PROTECT
         if (new_capacity > stk->capacity)
         {
             memset ((char* ) new_data_ptr + stk->capacity*stk->obj_size, POISON_BYTE, (new_capacity - stk->capacity)*stk->obj_size);
@@ -192,7 +190,7 @@ err_flags stack_pop (stack_t *stk, void *value)
     stk->size--;
     memcpy (value, (char* ) stk->data + stk->size*stk->obj_size, stk->obj_size);
 
-    #if POISON_PROTECT
+    #if STACK_KSP_PROTECT
         memset ((char* ) stk->data + stk->size*stk->obj_size, POISON_BYTE, stk->obj_size);
     #endif
 
@@ -245,17 +243,17 @@ err_flags stack_dtor (stack_t *stk)
         if (check_res != OK) log(log::WRN, "Destructor called on invalid object with error flags: 0x%x, see stack_perror", check_res);
     #endif
 
-    #if DUNGEON_MASTER_PROTECT
+    #if STACK_DUNGEON_MASTER_PROTECT
         stk->data = ((dungeon_master_t*) stk->data) - 1;
     #endif
 
-    #if POISON_PROTECT
+    #if STACK_KSP_PROTECT
         memset ((char* ) stk->data, POISON_BYTE, stk->obj_size * stk->capacity);
     #endif
 
     free (stk->data);
 
-    #if POISON_PROTECT
+    #if STACK_KSP_PROTECT
         // Poisoning
         stk->data     = const_cast<void *>(POISON_PTR); // Write to POISON_PTR is SegFault, but this is main idea of poisoning
         stk->size     = -1u;
@@ -334,7 +332,7 @@ void stack_perror (err_flags errors, FILE *stream, const char *prefix)
 
 void byte_fprintf (void *elem, size_t elem_size, FILE *stream)
 {
-    #if POISON_PROTECT
+    #if STACK_KSP_PROTECT
         bool is_poison = true;
     #else
         bool is_poison = false;
@@ -343,7 +341,7 @@ void byte_fprintf (void *elem, size_t elem_size, FILE *stream)
     for (size_t j = 0; j < elem_size; ++j)
     {
         
-        #if POISON_PROTECT
+        #if STACK_KSP_PROTECT
             if (((unsigned char *)elem)[j] != POISON_BYTE) 
             {
                 is_poison = false;

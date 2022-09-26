@@ -6,6 +6,20 @@
 #include <assert.h>
 #include "log.h"
 
+//  ---------------- Protection options ----------------
+#ifndef STACK_KSP_PROTECT
+#define STACK_KSP_PROTECT               1 // Poison protection
+#endif
+
+#ifndef STACK_DUNGEON_MASTER_PROTECT
+#define STACK_DUNGEON_MASTER_PROTECT    1 // Canary protection
+#endif
+
+#ifndef STACK_HASH_PROTECT
+#define STACK_HASH_PROTECT              1 // Hash protection
+#endif
+
+// ---------------- Types ----------------
 typedef unsigned char err_flags;
 typedef void (*elem_print_f) (void *elem, size_t elem_size, FILE *stream);
 
@@ -46,14 +60,12 @@ struct stack_t
     #endif
 };
 
+// ---------------- Functions ----------------
 err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity = 0, elem_print_f print_func = nullptr);
 
 #ifndef NDEBUG
-err_flags __stack_ctor_with_debug (stack_t *stk, const stack_debug_t *debug_data,
-                                size_t obj_size, size_t capacity = 0, elem_print_f print_func = nullptr);
-#endif
-
-#ifndef NDEBUG
+    err_flags __stack_ctor_with_debug (stack_t *stk, const stack_debug_t *debug_data,
+                                    size_t obj_size, size_t capacity = 0, elem_print_f print_func = nullptr);
 
     #define stack_ctor(stk, obj_size, ...)                                          \
     {                                                                               \
@@ -91,6 +103,8 @@ err_flags data_poison_check (const stack_t *stk);
 
 void byte_fprintf(void *elem, size_t elem_size, FILE *stream);
 
+// ---------------- Macros ----------------
+
 #ifndef NDEBUG
 
     #define stack_assert(stk)                                   \
@@ -113,5 +127,11 @@ void byte_fprintf(void *elem, size_t elem_size, FILE *stream);
 #endif
 
 #define UNWRAP(val) { if (val != res::OK) { return val; } }
+
+#ifndef STACK_CPP
+    #undef STACK_KSP_PROTECT
+    #undef STACK_DUNGEON_MASTER_PROTECT
+    #undef STACK_HASH_PROTECT
+#endif
 
 #endif // STACK_H

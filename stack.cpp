@@ -534,7 +534,7 @@ static void hash_check (stack_t *stk_mutable, err_flags *errs)
         stk_mutable->struct_hash = 0;
         lock_copy (stk_mutable);
 
-        if (stk->hash_func (stk, sizeof (stack_t)) != struct_hash)
+        if (stk->hash_func (stk, stk->obj_size) != struct_hash)
         {
             *errs |= STRUCT_CORRUPTED;
         }

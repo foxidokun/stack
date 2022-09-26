@@ -14,6 +14,10 @@
 #define STACK_HASH_PROTECT              1 // Hash protection
 #endif
 
+#ifndef STACK_MEMORY_PROTECT
+#define STACK_MEMORY_PROTECT              1 // Hash protection
+#endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
@@ -77,6 +81,10 @@ struct stack_t
     hash_t struct_hash;
     #endif
 
+    #if STACK_MEMORY_PROTECT
+    stack_t *struct_copy; /// Without data
+    #endif
+
     #if STACK_DUNGEON_MASTER_PROTECT
     dungeon_master_t two_blocks_down;
     #endif
@@ -131,8 +139,6 @@ err_flags stack_verify (stack_t *stk_mutable); // We need mutable stk for hash
 #else
 err_flags stack_verify (const stack_t *stk);
 #endif
-
-err_flags data_poison_check (const stack_t *stk);
 
 void byte_fprintf(void *elem, size_t elem_size, FILE *stream);
 

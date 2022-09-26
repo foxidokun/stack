@@ -15,7 +15,11 @@
 #endif
 
 #ifndef STACK_MEMORY_PROTECT
-#define STACK_MEMORY_PROTECT            1 // Memory protection
+#if (__linux__ || __unix__)
+    #define STACK_MEMORY_PROTECT            1 // Memory protection
+#else
+    #define STACK_MEMORY_PROTECT            0
+#endif
 #endif
 
 #include <stdlib.h>

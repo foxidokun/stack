@@ -1,11 +1,19 @@
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include "log.h"
 #include "stack.h"
 
 #define POISON_PROTECT            1
 #define DUNGEON_MASTER_PROTECT    1
 #define HASH_PROTECT              1
+
+const unsigned char __const_memory_val = 228;
+const void *const POISON_PTR = &__const_memory_val;
+const unsigned char POISON_BYTE = (unsigned char) -7u;
+
+typedef uint64_t dungeon_master_t;
+const dungeon_master_t dungeon_master_val = 0x300B4CC;
 
 err_flags stack_verify (const stack_t *stk)
 {
@@ -18,44 +26,52 @@ err_flags stack_verify (const stack_t *stk)
 
     #if POISON_PROTECT
         if (stk->obj_size == 0) { ret |= res::POISONED; };
-        if (stk->data == POISON_PTR) { ret |= res::POISONED; }
     #endif
 
     if (stk->data == nullptr && (stk->size != 0 || stk->capacity != 0))
         { ret |= res::OVER_FILLED | BAD_CAPACITY; }
 
     #if POISON_PROTECT
-    if (!(ret & POISONED) && stk->data != nullptr)
-    {
-        for (size_t n = stk->size; n < stk->capacity; ++n)
-        {
-            for (size_t i = 0; i < stk->obj_size; ++i)
-            {
-                if (((unsigned char *)stk->data)[stk->obj_size*n+i] != POISON_BYTE)
-                {
-                    ret |= res::CORRUPTED;
-                }
-            }
-        }
-
-        bool all_poisoned = (stk->size);
-
-        for (size_t n = 0; n < stk->size; ++n)
-        {
-            for (size_t i = 0; i < stk->obj_size; ++i)
-            {
-                if (((unsigned char *)stk->data)[stk->obj_size*n+i] != POISON_BYTE)
-                {
-                    all_poisoned = false;
-                }
-            }
-        }
-
-        if (all_poisoned) ret |= POISONED;
-    }
+        data_poison_check (stk);
     #endif
 
     return ret;
+}
+
+err_flags data_poison_check (const stack_t *stk)
+{
+    assert (stk != nullptr && "In this function stk can't be null");
+
+    if (stk->data == POISON_PTR || stk->data == nullptr)
+        return POISONED;
+
+    for (size_t n = stk->size; n < stk->capacity; ++n)
+    {
+        for (size_t i = 0; i < stk->obj_size; ++i)
+        {
+            if (((unsigned char *)stk->data)[stk->obj_size*n+i] != POISON_BYTE)
+            {
+                return res::CORRUPTED;
+            }
+        }
+    }
+
+    for (size_t n = 0; n < stk->size; ++n)
+    {
+        bool elem_poisoned = true;
+
+        for (size_t i = 0; i < stk->obj_size; ++i)
+        {
+            if (((unsigned char *)stk->data)[stk->obj_size*n+i] != POISON_BYTE)
+            {
+                elem_poisoned = false;
+            }
+        }
+
+        if (elem_poisoned) return POISONED;
+    }
+
+    return OK;
 }
 
 err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity, elem_print_f print_func)

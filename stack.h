@@ -6,10 +6,6 @@
 #include <assert.h>
 #include "log.h"
 
-const unsigned char __const_memory_val = 228;
-const void *const POISON_PTR = &__const_memory_val;
-const unsigned char POISON_BYTE = (unsigned char) -7u;
-
 typedef unsigned char err_flags;
 typedef void (*elem_print_f) (void *elem, size_t elem_size, FILE *stream);
 
@@ -89,6 +85,8 @@ void stack_dump (const stack_t *stk, FILE *stream);
 void stack_perror (err_flags errors, FILE *stream, const char *prefix = nullptr);
 
 err_flags stack_verify (const stack_t *stk);
+
+err_flags data_poison_check (const stack_t *stk);
 
 void byte_fprintf(void *elem, size_t elem_size, FILE *stream);
 

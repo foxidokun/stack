@@ -8,8 +8,10 @@
 
 const unsigned char __const_memory_val = 228;
 const void *const POISON_PTR = &__const_memory_val;
-
 const unsigned char POISON_BYTE = (unsigned char) -7u;
+
+typedef unsigned char err_flags;
+typedef void (*elem_print_f) (void *elem, size_t elem_size, FILE *stream);
 
 #define UNWRAP(val) { if (val != res::OK) { return val; } }
 
@@ -42,17 +44,18 @@ struct stack_t
     size_t capacity;
     size_t obj_size;
     size_t reserved;
+    elem_print_f print_func;
 
     #ifndef NDEBUG
     const stack_debug_t *debug_data;
     #endif
 };
 
-res __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity = 0);
+err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity = 0, elem_print_f print_func = nullptr);
 
 #ifndef NDEBUG
-res __stack_ctor_with_debug (stack_t *stk, const stack_debug_t *debug_data,
-                                size_t obj_size, size_t capacity = 0);
+err_flags __stack_ctor_with_debug (stack_t *stk, const stack_debug_t *debug_data,
+                                size_t obj_size, size_t capacity = 0, elem_print_f print_func = nullptr);
 #endif
 
 #ifndef NDEBUG
@@ -73,33 +76,36 @@ res __stack_ctor_with_debug (stack_t *stk, const stack_debug_t *debug_data,
 
 #endif
 
-res stack_resize (stack_t *stk, size_t new_capacity);
+err_flags stack_resize (stack_t *stk, size_t new_capacity);
 
-res stack_shrink_to_fit (stack_t *stk);
+err_flags stack_shrink_to_fit (stack_t *stk);
 
-res stack_push (stack_t *stk, const void *value);
+err_flags stack_push (stack_t *stk, const void *value);
 
-res stack_pop (stack_t *stk, void *value);
+err_flags stack_pop (stack_t *stk, void *value);
 
-res stack_dtor (stack_t *stk);
+err_flags stack_dtor (stack_t *stk);
 
 void stack_dump (const stack_t *stk, FILE *stream);
 
-unsigned int stack_verify (const stack_t *stk);
+void stack_perror (err_flags errors, FILE *stream, const char *prefix = nullptr);
 
+err_flags stack_verify (const stack_t *stk);
+
+void byte_fprintf(void *elem, size_t elem_size, FILE *stream);
 
 #ifndef NDEBUG
 
     #define stack_assert(stk)                                   \
     {                                                           \
-        unsigned int check_res = stack_verify(stk);             \
+        err_flags check_res = stack_verify(stk);                \
         if (check_res != res::OK)                               \
         {                                                       \
             log(log::ERR,                                       \
-                "Failed stack check with err flags: 0x%x",      \
-                                            check_res);         \
+                "Failed stack check with err flags: ");         \
+            stack_perror (check_res, get_log_stream(), "->");   \
             stack_dump(stk, get_log_stream());                  \
-            assert (0 && "Bad stack, check logs");              \
+            return check_res;                                   \
         }                                                       \
     }                                   
 

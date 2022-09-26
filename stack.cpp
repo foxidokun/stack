@@ -3,9 +3,9 @@
 #include "log.h"
 #include "stack.h"
 
-unsigned int stack_verify (const stack_t *stk)
+err_flags stack_verify (const stack_t *stk)
 {
-    unsigned int ret = res::OK;
+    err_flags ret = res::OK;
 
     if (stk == nullptr) { return res::NULLPTR; }
 
@@ -54,7 +54,7 @@ unsigned int stack_verify (const stack_t *stk)
     return ret;
 }
 
-res __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity)
+err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity, elem_print_f print_func)
 {
     assert (obj_size > 0 && "object size cant be 0");
 
@@ -67,6 +67,9 @@ res __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity)
     stk->size     = 0;
     stk->obj_size = obj_size;
 
+    if (print_func != nullptr)  stk->print_func = print_func;
+    else                        stk->print_func = byte_fprintf;
+
     #ifndef NDEBUG
     memset (stk->data, POISON_BYTE, capacity*obj_size);
     #endif
@@ -77,18 +80,18 @@ res __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity)
 }
 
 #ifndef NDEBUG
-res __stack_ctor_with_debug (stack_t *stk, const stack_debug_t *debug_data,
-                                size_t obj_size, size_t capacity)
+err_flags __stack_ctor_with_debug (stack_t *stk, const stack_debug_t *debug_data,
+                                size_t obj_size, size_t capacity, elem_print_f print_func)
 {
     assert (stk != nullptr && "pointer can't be NULL");
 
     stk->debug_data = debug_data;
 
-    return __stack_ctor (stk, obj_size, capacity);
+    return __stack_ctor (stk, obj_size, capacity, print_func);
 }
 #endif
 
-res stack_resize (stack_t *stk, size_t new_capacity)
+err_flags stack_resize (stack_t *stk, size_t new_capacity)
 {
     stack_assert (stk);
     assert (stk->size <= new_capacity);
@@ -110,7 +113,7 @@ res stack_resize (stack_t *stk, size_t new_capacity)
     return res::OK;
 }
 
-res stack_shrink_to_fit (stack_t *stk)
+err_flags stack_shrink_to_fit (stack_t *stk)
 {
     stack_assert (stk);
 
@@ -120,7 +123,7 @@ res stack_shrink_to_fit (stack_t *stk)
     return res::OK;
 }
 
-res stack_pop (stack_t *stk, void *value)
+err_flags stack_pop (stack_t *stk, void *value)
 {
     stack_assert (stk);
     assert (value != nullptr && "pointer can't be NULL");
@@ -152,7 +155,7 @@ res stack_pop (stack_t *stk, void *value)
     return res::OK;
 }
 
-res stack_push (stack_t *stk, const void *value)
+err_flags stack_push (stack_t *stk, const void *value)
 {
     stack_assert (stk);
     assert (value != nullptr && "pointer can't be null");
@@ -176,7 +179,7 @@ res stack_push (stack_t *stk, const void *value)
     return res::OK;
 }
 
-res stack_dtor (stack_t *stk)
+err_flags stack_dtor (stack_t *stk)
 {
     if (stk == nullptr) { return res::OK; }
 
@@ -230,30 +233,57 @@ void stack_dump (const stack_t *stk, FILE *stream)
                      stk->size, stk->capacity, stk->obj_size, stk->reserved);
     fprintf (stream, "Stack data[%p]\n", stk->data);
 
-    bool is_poison = true;
-
     for (size_t i = 0; i < stk->capacity; ++i)
     {
-        is_poison = true;
-
         fprintf (stream, "%c data[%03lu]: ", (i<stk->size ? '*' : ' '), i);
-        for (size_t j = 0; j < stk->obj_size; ++j)
-        {
-            if (((unsigned char *)stk->data)[stk->obj_size*i+j] != POISON_BYTE) 
-            {
-                is_poison = false;
-            }
-
-            fprintf (stream, "|0x%08x|", ((unsigned char *)stk->data)[stk->obj_size*i+j]);
-        }
-
-        if (is_poison)
-        {
-            fprintf (stream, (i < stk->size) ? R : D "  (POISON)" D); 
-        }
-
-        fprintf (stream, "\n");
+        stk->print_func ((char *) stk->data + i*stk->obj_size, stk->obj_size, stream);
     }
 
     fprintf (stream, R Bold "======== END STACK DUMP =======\n\n" Plain D);
+}
+
+void stack_perror (err_flags errors, FILE *stream, const char *prefix)
+{
+    if (errors & res::NULLPTR)
+        fprintf (stream, "%sStack pointer is nullptr\n", prefix ? prefix : "");
+
+    if (errors & res::OVER_FILLED)
+        fprintf (stream, "%sStack is overfilled (size > capacity)\n", prefix ? prefix : "");
+
+    if (errors & res::POISONED)
+        fprintf (stream, "%sStack is posioned (posible use after free)\n", prefix ? prefix : "");
+
+    if (errors & res::NOMEM)
+        fprintf (stream, "%sOut of Memory\n", prefix ? prefix : "");
+
+    if (errors & res::EMPTY)
+        fprintf (stream, "%sPop from emty stack\n", prefix ? prefix : "");
+
+    if (errors & res::BAD_CAPACITY)
+        fprintf (stream, "%sBad stack capacity (< reserved, or != 0 with null data)\n", prefix ? prefix : "");
+
+    if (errors & CORRUPTED)
+        fprintf (stream, "%sStack is corrupted\n", prefix ? prefix : "");
+}
+
+void byte_fprintf (void *elem, size_t elem_size, FILE *stream)
+{
+    bool is_poison;
+
+    for (size_t j = 0; j < elem_size; ++j)
+    {
+        if (((unsigned char *)elem)[j] != POISON_BYTE) 
+        {
+            is_poison = false;
+        }
+
+        fprintf (stream, "|0x%08x|", ((unsigned char *)elem)[j]);
+    }
+
+    if (is_poison)
+    {
+        fprintf (stream, "(POISON)"); 
+    }
+
+    fprintf (stream, "\n");
 }

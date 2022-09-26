@@ -11,12 +11,16 @@ unsigned int stack_verify (const stack_t *stk)
 
     if (stk->size > stk->capacity) { ret |= res::OVER_FILLED; }
     if (stk->capacity < stk->reserved) { ret |= res::BAD_CAPACITY; }
-    if (stk->obj_size == 0) { ret |= res::POISONED; };
 
+    #ifndef NDEBUG
+    if (stk->obj_size == 0) { ret |= res::POISONED; };
     if (stk->data == POISON_PTR) { ret |= res::POISONED; }
+    #endif
+
     if (stk->data == nullptr && (stk->size != 0 || stk->capacity != 0))
         { ret |= res::OVER_FILLED | BAD_CAPACITY; }
 
+    #ifndef NDEBUG
     if (!(ret & POISONED))
     {
         for (size_t n = stk->size; n < stk->capacity; ++n)
@@ -45,6 +49,7 @@ unsigned int stack_verify (const stack_t *stk)
 
         if (all_poisoned) ret |= POISONED;
     }
+    #endif
 
     return ret;
 }

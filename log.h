@@ -39,23 +39,12 @@ static inline void current_time (char *buf, size_t buf_size);
  * @param      ...   printf parameters (format string & it's parameters)
  */
 #ifndef DISABLE_LOGS
-#define log(lvl, ...)                                                   \
-{                                                                       \
-    if (lvl >= __LOG_LEVEL)                                             \
-    {                                                                   \
-        char time_buf[__TIME_BUF_SIZE] = "";                            \
-        current_time (time_buf, __TIME_BUF_SIZE);                       \
-        fprintf (__LOG_OUT_STREAM, "%s ", time_buf);                    \
-                                                                        \
-        if      (lvl == log::DBG) { fprintf (__LOG_OUT_STREAM, "DEBUG"); }                 \
-        else if (lvl == log::INF) { fprintf (__LOG_OUT_STREAM, Cyan "INFO " D); }          \
-        else if (lvl == log::WRN) { fprintf (__LOG_OUT_STREAM, Y "WARN " D); }             \
-        else if (lvl == log::ERR) { fprintf (__LOG_OUT_STREAM, R "ERROR" D); }             \
-                                                                        \
-        fprintf (__LOG_OUT_STREAM, " [" __FILE__ ":%d] ", __LINE__);    \
-        fprintf (__LOG_OUT_STREAM, __VA_ARGS__);                        \
-        fputc   ('\n', __LOG_OUT_STREAM);                               \
-    }                                                                   \
+
+void _log (log lvl, const char *fmt, const char *file, unsigned int line, ...);
+
+#define log(lvl, fmt, ...)                               \
+{                                                        \
+    _log (lvl, fmt, __FILE__, __LINE__, ##__VA_ARGS__);  \
 }                                                       
 
 #else

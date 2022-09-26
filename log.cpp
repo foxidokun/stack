@@ -24,3 +24,27 @@ FILE *get_log_stream ()
 {
     return __LOG_OUT_STREAM;
 }
+
+void _log (log lvl, const char *fmt, const char *file, unsigned int line...)
+{
+    va_list args;
+    va_start (args, line);
+
+    if (lvl >= __LOG_LEVEL)                                             
+    {                                                                   
+        char time_buf[__TIME_BUF_SIZE] = "";                            
+        current_time (time_buf, __TIME_BUF_SIZE);                       
+        fprintf (__LOG_OUT_STREAM, "%s ", time_buf);                    
+                                                                        
+        if      (lvl == log::DBG) { fprintf (__LOG_OUT_STREAM, "DEBUG"); }                 
+        else if (lvl == log::INF) { fprintf (__LOG_OUT_STREAM, Cyan "INFO " D); }          
+        else if (lvl == log::WRN) { fprintf (__LOG_OUT_STREAM, Y "WARN " D); }             
+        else if (lvl == log::ERR) { fprintf (__LOG_OUT_STREAM, R "ERROR" D); }             
+                                                                        
+        fprintf (__LOG_OUT_STREAM, " [%s:%u] ", file, line);    
+        vfprintf (__LOG_OUT_STREAM, fmt, args);                        
+        fputc   ('\n', __LOG_OUT_STREAM);                               
+    }       
+
+    va_end (args);                                                            
+}

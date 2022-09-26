@@ -11,14 +11,15 @@ typedef void (*elem_print_f) (void *elem, size_t elem_size, FILE *stream);
 
 enum res
 {
-    OK              = 0,
-    NULLPTR         = 1<<0,
-    OVER_FILLED     = 1<<1,
-    POISONED        = 1<<2,
-    NOMEM           = 1<<3,
-    EMPTY           = 1<<4,
-    BAD_CAPACITY    = 1<<5,
-    CORRUPTED       = 1<<6
+    OK                  = 0,
+    NULLPTR             = 1<<0,
+    OVER_FILLED         = 1<<1,
+    POISONED            = 1<<2,
+    NOMEM               = 1<<3,
+    EMPTY               = 1<<4,
+    BAD_CAPACITY        = 1<<5,
+    DATA_CORRUPTED      = 1<<6,
+    STRUCT_CORRUPTED    = 1<<7
 };
 
 #ifndef NDEBUG

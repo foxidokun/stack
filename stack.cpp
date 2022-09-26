@@ -35,6 +35,18 @@ err_flags stack_verify (const stack_t *stk)
         data_poison_check (stk);
     #endif
 
+    #if DUNGEON_MASTER_PROTECT
+        if (((dungeon_master_t *)stk->data)[-1] != dungeon_master_val)
+        {
+            ret |= DATA_CORRUPTED;
+        }
+
+        if (* (dungeon_master_t *) ((char *)stk->data + stk->capacity * stk->obj_size) != dungeon_master_val)
+        {
+            ret |= DATA_CORRUPTED;
+        }
+    #endif
+
     return ret;
 }
 
@@ -51,7 +63,7 @@ err_flags data_poison_check (const stack_t *stk)
         {
             if (((unsigned char *)stk->data)[stk->obj_size*n+i] != POISON_BYTE)
             {
-                return res::CORRUPTED;
+                return res::DATA_CORRUPTED;
             }
         }
     }
@@ -78,7 +90,12 @@ err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity, elem_pri
 {
     assert (obj_size > 0 && "object size cant be 0");
 
-    void *mem_ptr = calloc (capacity, obj_size); // Works even with capacity = 0
+    #if DUNGEON_MASTER_PROTECT
+        void *mem_ptr = calloc (capacity*obj_size + 2*sizeof (dungeon_master_t), 1);
+    #else
+        void *mem_ptr = calloc (capacity, obj_size); // Works even with capacity = 0
+    #endif
+
     if (mem_ptr ==  nullptr) { return res::NOMEM; }
 
     stk->data     = mem_ptr;
@@ -92,6 +109,12 @@ err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity, elem_pri
 
     #if POISON_PROTECT
         memset (stk->data, POISON_BYTE, capacity*obj_size);
+    #endif
+
+    #if DUNGEON_MASTER_PROTECT
+        *(dungeon_master_t*)stk->data = dungeon_master_val;
+        stk->data = (dungeon_master_t*)stk->data + 1;
+        * (dungeon_master_t *) ((char *)stk->data + stk->capacity * stk->obj_size) = dungeon_master_val;
     #endif
 
     stack_assert (stk);
@@ -116,8 +139,22 @@ err_flags stack_resize (stack_t *stk, size_t new_capacity)
     stack_assert (stk);
     assert (stk->size <= new_capacity);
 
-    void *new_data_ptr = realloc (stk->data, new_capacity*stk->obj_size); // Не заполняет нулями
+    #if DUNGEON_MASTER_PROTECT
+        stk->data = ((dungeon_master_t*) stk->data) - 1;
+    #endif
+
+    #if DUNGEON_MASTER_PROTECT
+        void *new_data_ptr = realloc (stk->data, new_capacity*stk->obj_size + 2*sizeof (dungeon_master_t)); // Не заполняет нулями
+    #else
+        void *new_data_ptr = realloc (stk->data, new_capacity*stk->obj_size); // Не заполняет нулями
+    #endif
+
     if (new_data_ptr == nullptr) return res::NOMEM;
+
+    #if DUNGEON_MASTER_PROTECT
+        new_data_ptr = ((dungeon_master_t*) new_data_ptr) + 1;
+        * ((dungeon_master_t *) ((char *)new_data_ptr + new_capacity * stk->obj_size)) = dungeon_master_val;
+    #endif
 
     #if POISON_PROTECT
         if (new_capacity > stk->capacity)
@@ -203,6 +240,15 @@ err_flags stack_dtor (stack_t *stk)
 {
     if (stk == nullptr) { return res::OK; }
 
+    #ifndef NDEBUG
+        err_flags check_res = stack_verify (stk);
+        if (check_res != OK) log(log::WRN, "Destructor called on invalid object with error flags: 0x%x, see stack_perror", check_res);
+    #endif
+
+    #if DUNGEON_MASTER_PROTECT
+        stk->data = ((dungeon_master_t*) stk->data) - 1;
+    #endif
+
     #if POISON_PROTECT
         memset ((char* ) stk->data, POISON_BYTE, stk->obj_size * stk->capacity);
     #endif
@@ -282,8 +328,8 @@ void stack_perror (err_flags errors, FILE *stream, const char *prefix)
     if (errors & res::BAD_CAPACITY)
         fprintf (stream, "%sBad stack capacity (< reserved, or != 0 with null data)\n", prefix ? prefix : "");
 
-    if (errors & CORRUPTED)
-        fprintf (stream, "%sStack is corrupted\n", prefix ? prefix : "");
+    if (errors & DATA_CORRUPTED)
+        fprintf (stream, "%sStack data is corrupted\n", prefix ? prefix : "");
 }
 
 void byte_fprintf (void *elem, size_t elem_size, FILE *stream)

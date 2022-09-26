@@ -17,20 +17,19 @@ err_flags stack_verify (const stack_t *stk)
 {
     err_flags ret = res::OK;
 
-    if (stk == nullptr) { return res::NULLPTR; }
+    if (stk == nullptr) return res::NULLPTR;
 
-    if (stk->size > stk->capacity) { ret |= res::OVER_FILLED; }
-    if (stk->capacity < stk->reserved) { ret |= res::BAD_CAPACITY; }
-
-    #if STACK_KSP_PROTECT
-        if (stk->obj_size == 0) { ret |= res::POISONED; };
-    #endif
-
-    if (stk->data == nullptr && (stk->size != 0 || stk->capacity != 0))
-        { ret |= res::OVER_FILLED | BAD_CAPACITY; }
+    if (stk->size > stk->capacity)      ret |= res::OVER_FILLED;
+    if (stk->capacity < stk->reserved)  ret |= res::BAD_CAPACITY;
+    if (stk->obj_size == 0)             ret |= res::INVALID_OBJ_SIZE;
+    if (stk->print_func == nullptr)     ret |= res::INVALID_FUNC;
+    if (stk->data == nullptr)           ret |= res::DATA_NULL;
 
     #if STACK_KSP_PROTECT
-        data_poison_check (stk);
+        if (stk->data != nullptr)
+        {
+            ret |= data_poison_check (stk);
+        } 
     #endif
 
     #if STACK_DUNGEON_MASTER_PROTECT
@@ -51,8 +50,9 @@ err_flags stack_verify (const stack_t *stk)
 err_flags data_poison_check (const stack_t *stk)
 {
     assert (stk != nullptr && "In this function stk can't be null");
+    assert (stk->data != nullptr && "Stack data in this function can't be null");
 
-    if (stk->data == POISON_PTR || stk->data == nullptr)
+    if (stk->data == POISON_PTR)
         return POISONED;
 
     for (size_t n = stk->size; n < stk->capacity; ++n)
@@ -306,29 +306,31 @@ void stack_dump (const stack_t *stk, FILE *stream)
     fprintf (stream, R Bold "======== END STACK DUMP =======\n\n" Plain D);
 }
 
+#define _if_log(res, message)                                  \
+{                                                              \
+    if (errors & res)                                          \
+        fprintf (stream, "%s" message, prefix ? prefix : "");  \
+}
+
 void stack_perror (err_flags errors, FILE *stream, const char *prefix)
 {
-    if (errors & res::NULLPTR)
-        fprintf (stream, "%sStack pointer is nullptr\n", prefix ? prefix : "");
+    _if_log (NULLPTR         , "Stack pointer is nullptr");
+    _if_log (OVER_FILLED     , "Used > capacity");
+    _if_log (POISONED        , "Use after deconstructor");
+    _if_log (NOMEM           , "Out of memory");
+    _if_log (EMPTY           , "Pop from empty stack");
+    _if_log (BAD_CAPACITY    , "Capacity < reserved");
+    _if_log (DATA_CORRUPTED  , "Internal data buffer is corrupted");
+    _if_log (STRUCT_CORRUPTED, "Struct id corrupted");
+    _if_log (INVALID_OBJ_SIZE, "Invalid object size = 0");
+    _if_log (INVALID_FUNC    , "Nullptr function pointer");
+    _if_log (DATA_NULL       , "Data pointer is nullptr");
 
-    if (errors & res::OVER_FILLED)
-        fprintf (stream, "%sStack is overfilled (size > capacity)\n", prefix ? prefix : "");
-
-    if (errors & res::POISONED)
-        fprintf (stream, "%sStack is posioned (posible use after free)\n", prefix ? prefix : "");
-
-    if (errors & res::NOMEM)
-        fprintf (stream, "%sOut of Memory\n", prefix ? prefix : "");
-
-    if (errors & res::EMPTY)
-        fprintf (stream, "%sPop from emty stack\n", prefix ? prefix : "");
-
-    if (errors & res::BAD_CAPACITY)
-        fprintf (stream, "%sBad stack capacity (< reserved, or != 0 with null data)\n", prefix ? prefix : "");
-
-    if (errors & DATA_CORRUPTED)
-        fprintf (stream, "%sStack data is corrupted\n", prefix ? prefix : "");
+    assert ((errors & ~(NULLPTR | OVER_FILLED | POISONED | NOMEM | EMPTY | BAD_CAPACITY | DATA_CORRUPTED
+                    | STRUCT_CORRUPTED | INVALID_OBJ_SIZE | INVALID_FUNC | DATA_NULL)) == 0 && "Unexpected error");
 }
+
+#undef _if_log
 
 void byte_fprintf (void *elem, size_t elem_size, FILE *stream)
 {
@@ -339,8 +341,7 @@ void byte_fprintf (void *elem, size_t elem_size, FILE *stream)
     #endif
 
     for (size_t j = 0; j < elem_size; ++j)
-    {
-        
+    {   
         #if STACK_KSP_PROTECT
             if (((unsigned char *)elem)[j] != POISON_BYTE) 
             {

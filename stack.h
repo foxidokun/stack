@@ -1,11 +1,6 @@
 #ifndef STACK_H
 #define STACK_H
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <assert.h>
-#include "log.h"
-
 //  ---------------- Protection options ----------------
 #ifndef STACK_KSP_PROTECT
 #define STACK_KSP_PROTECT               1 // Poison protection
@@ -19,8 +14,17 @@
 #define STACK_HASH_PROTECT              1 // Hash protection
 #endif
 
+#include <stdlib.h>
+#include <stdio.h>
+#include <assert.h>
+#include "log.h"
+
+#if STACK_HASH_PROTECT
+#include "hash.h"
+#endif
+
 // ---------------- Types ----------------
-typedef unsigned char err_flags;
+typedef unsigned short err_flags;
 typedef void (*elem_print_f) (void *elem, size_t elem_size, FILE *stream);
 
 enum res
@@ -33,7 +37,10 @@ enum res
     EMPTY               = 1<<4,
     BAD_CAPACITY        = 1<<5,
     DATA_CORRUPTED      = 1<<6,
-    STRUCT_CORRUPTED    = 1<<7
+    STRUCT_CORRUPTED    = 1<<7,
+    INVALID_OBJ_SIZE    = 1<<8,
+    INVALID_FUNC        = 1<<9,
+    DATA_NULL           = 1<<10
 };
 
 #ifndef NDEBUG
@@ -57,6 +64,11 @@ struct stack_t
 
     #ifndef NDEBUG
     const stack_debug_t *debug_data;
+    #endif
+
+    #if STACK_HASH_PROTECT
+    hash_t data_hash;
+    hash_t struct_hash;
     #endif
 };
 

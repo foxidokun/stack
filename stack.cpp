@@ -72,10 +72,12 @@ err_flags stack_verify (const stack_t *stk)
     data_poison_check (stk, &ret);
     dungeon_master_check (stk, &ret);
     hash_check (stk_mutable, &ret);
-    memory_check(stk, &ret);
+    memory_check (stk, &ret);
 
     return ret;
 }
+
+// ------------------------------------------------------------------------------------
 
 err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity
 #ifndef NDEBUG
@@ -143,6 +145,8 @@ err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity
     return res::OK;
 }
 
+// ------------------------------------------------------------------------------------
+
 #ifndef NDEBUG
 err_flags __stack_ctor_with_debug (stack_t *stk, const stack_debug_t *debug_data,
                                 size_t obj_size, size_t capacity, elem_print_f print_func)
@@ -198,6 +202,8 @@ err_flags stack_resize (stack_t *stk, size_t new_capacity)
     return res::OK;
 }
 
+// ------------------------------------------------------------------------------------
+
 err_flags stack_shrink_to_fit (stack_t *stk)
 {
     stack_assert (stk);
@@ -207,6 +213,8 @@ err_flags stack_shrink_to_fit (stack_t *stk)
     stack_assert (stk);
     return res::OK;
 }
+
+// ------------------------------------------------------------------------------------
 
 err_flags stack_pop (stack_t *stk, void *value)
 {
@@ -251,6 +259,8 @@ err_flags stack_pop (stack_t *stk, void *value)
     return res::OK;
 }
 
+// ------------------------------------------------------------------------------------
+
 err_flags stack_push (stack_t *stk, const void *value)
 {
     stack_assert (stk);
@@ -284,6 +294,8 @@ err_flags stack_push (stack_t *stk, const void *value)
     stack_assert (stk);
     return res::OK;
 }
+
+// ------------------------------------------------------------------------------------
 
 err_flags stack_dtor (stack_t *stk)
 {
@@ -321,6 +333,8 @@ err_flags stack_dtor (stack_t *stk)
 
     return res::OK;
 }
+
+// ------------------------------------------------------------------------------------
 
 void stack_dump (stack_t *stk, FILE *stream)
 {
@@ -397,6 +411,8 @@ void stack_dump (stack_t *stk, FILE *stream)
     fprintf (stream, R Bold "======== END STACK DUMP =======\n\n" Plain D);
 }
 
+// ------------------------------------------------------------------------------------
+
 #define _if_log(res, message)                                       \
 {                                                                   \
     if (errors & res)                                               \
@@ -422,6 +438,8 @@ void stack_perror (err_flags errors, FILE *stream, const char *prefix)
 }
 
 #undef _if_log
+
+// ------------------------------------------------------------------------------------
 
 static void data_poison_check (const stack_t *stk, err_flags *errs)
 {
@@ -474,6 +492,8 @@ static void data_poison_check (const stack_t *stk, err_flags *errs)
     #endif
 }
 
+// ------------------------------------------------------------------------------------
+
 static void dungeon_master_check (const stack_t *stk, err_flags *errs)
 {
     #if STACK_DUNGEON_MASTER_PROTECT
@@ -496,6 +516,8 @@ static void dungeon_master_check (const stack_t *stk, err_flags *errs)
     }
     #endif
 }
+
+// ------------------------------------------------------------------------------------
 
 static void hash_check (stack_t *stk_mutable, err_flags *errs)
 {
@@ -525,6 +547,8 @@ static void hash_check (stack_t *stk_mutable, err_flags *errs)
     #endif
 }
 
+// ------------------------------------------------------------------------------------
+
 static void memory_check (const stack_t *stk, err_flags *errs)
 {
     #if STACK_MEMORY_PROTECT
@@ -537,6 +561,8 @@ static void memory_check (const stack_t *stk, err_flags *errs)
         }
     #endif
 }
+
+// ------------------------------------------------------------------------------------
 
 void byte_fprintf (const void *elem, size_t elem_size, FILE *stream)
 {
@@ -569,6 +595,8 @@ void byte_fprintf (const void *elem, size_t elem_size, FILE *stream)
     }
 }
 
+// ------------------------------------------------------------------------------------
+
 static inline void unlock_copy (stack_t *stk)
 {
     assert (stk != nullptr && "pointer can't be null");
@@ -578,6 +606,8 @@ static inline void unlock_copy (stack_t *stk)
     #endif
 }
 
+// ------------------------------------------------------------------------------------
+
 static inline void lock_copy (stack_t *stk)
 {
     assert (stk != nullptr && "pointer can't be null");
@@ -586,6 +616,8 @@ static inline void lock_copy (stack_t *stk)
         mprotect (stk->struct_copy, sizeof (stack_t), PROT_READ);
     #endif
 }
+
+// ------------------------------------------------------------------------------------
 
 static inline void unlock_data (stack_t *stk)
 {
@@ -603,6 +635,8 @@ static inline void unlock_data (stack_t *stk)
     #endif
 }
 
+// ------------------------------------------------------------------------------------
+
 static inline void lock_data (stack_t *stk)
 {
     assert (stk != nullptr && "pointer can't be null");
@@ -618,6 +652,8 @@ static inline void lock_data (stack_t *stk)
         mprotect (data, data_size, PROT_READ);
     #endif
 }
+
+// ------------------------------------------------------------------------------------
 
 static inline void update_hash (stack_t *stk)
 {
@@ -639,6 +675,8 @@ static inline void update_hash (stack_t *stk)
     assert (stack_verify (stk) == OK);
 }
 
+// ------------------------------------------------------------------------------------
+
 static size_t get_data_size (size_t capacity, size_t obj_size)
 {
     size_t data_size = capacity*obj_size;
@@ -648,6 +686,8 @@ static size_t get_data_size (size_t capacity, size_t obj_size)
 
     return data_size;
 }
+
+// ------------------------------------------------------------------------------------
 
 static void *cust_realloc (void *prev_ptr, size_t prev_size, size_t new_size)
 {
@@ -664,6 +704,8 @@ static void *cust_realloc (void *prev_ptr, size_t prev_size, size_t new_size)
 
     return new_ptr;
 }
+
+// ------------------------------------------------------------------------------------
 
 static void init_dungeon_master_protection (stack_t *stk)
 {

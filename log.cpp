@@ -38,8 +38,8 @@ void _log (log lvl, const char *fmt, const char *file, unsigned int line...)
                                                                         
         if      (lvl == log::DBG) { fprintf (__LOG_OUT_STREAM, "DEBUG"); }                 
         else if (lvl == log::INF) { fprintf (__LOG_OUT_STREAM, Cyan "INFO " D); }          
-        else if (lvl == log::WRN) { fprintf (__LOG_OUT_STREAM, Y "WARN " D); }             
-        else if (lvl == log::ERR) { fprintf (__LOG_OUT_STREAM, R "ERROR" D); }             
+        else if (lvl == log::WRN) { fprintf (__LOG_OUT_STREAM, Y "WARN " D); fflush (__LOG_OUT_STREAM); }             
+        else if (lvl == log::ERR) { fprintf (__LOG_OUT_STREAM, R "ERROR" D); fflush (__LOG_OUT_STREAM); }             
                                                                         
         fprintf (__LOG_OUT_STREAM, " [%s:%u] ", file, line);    
         vfprintf (__LOG_OUT_STREAM, fmt, args);                        

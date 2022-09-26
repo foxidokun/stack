@@ -6,15 +6,6 @@
 #include <assert.h>
 #include "log.h"
 
-enum PROTECTION
-{
-    POISON          = 1<<0,
-    DUNGEON_GUARD   = 1<<1,
-    HASH            = 1<<2
-};
-
-const int __PROTECTION_LEVEL = (POISON & DUNGEON_GUARD & HASH);
-
 const unsigned char __const_memory_val = 228;
 const void *const POISON_PTR = &__const_memory_val;
 const unsigned char POISON_BYTE = (unsigned char) -7u;

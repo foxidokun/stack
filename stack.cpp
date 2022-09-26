@@ -159,6 +159,8 @@ err_flags __stack_ctor_with_debug (stack_t *stk, const stack_debug_t *debug_data
 }
 #endif
 
+// ------------------------------------------------------------------------------------
+
 err_flags stack_resize (stack_t *stk, size_t new_capacity)
 {
     stack_assert (stk);

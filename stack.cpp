@@ -11,9 +11,11 @@
 #endif
 
 // ---- ---- ---- --- CONSTS ---- ---- ---- ----
+#if STACK_KSP_PROTECT
 const unsigned char __const_memory_val = 228;
-const void *const POISON_PTR = &__const_memory_val;
+const void *const POISON_PTR = &__const_memory_val; // Pointer to const memory
 const unsigned char POISON_BYTE = (unsigned char) -7u;
+#endif
 
 const err_flags DATA_NOT_OKAY = DATA_NULL | DATA_CORRUPTED | POISONED | BAD_CAPACITY | INVALID_OBJ_SIZE | STRUCT_CORRUPTED;
 
@@ -33,7 +35,11 @@ static void data_poison_check    (const stack_t *stk, err_flags *errs);
 static void hash_check           (      stack_t *stk, err_flags *errs);
 static void memory_check         (const stack_t *stk, err_flags *errs);
 
-static size_t stack_data_size (const stack_t *stk);
+static size_t get_data_size (size_t capacity, size_t obj_size);
+
+static void *cust_realloc (void *prev_ptr, size_t prev_size, size_t new_size);
+
+static void init_dungeon_master_protection (stack_t *stk);
 
 // ---- ---- ---- --- IMPLEMENTATIONS ---- ---- ---- ----
 
@@ -74,7 +80,7 @@ err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity
 #endif
 )
 {
-    assert (obj_size > 0 && "object size cant be 0");
+    assert (obj_size > 0   && "object size cant be 0");
     assert (stk != nullptr && "pointer can't be null");
 
     // Field initialising
@@ -84,11 +90,11 @@ err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity
     stk->obj_size = obj_size;
 
     // Memory allocation
-    size_t data_size = stack_data_size (stk);
+    size_t data_size = get_data_size (stk->capacity, stk->obj_size);
 
     #if STACK_MEMORY_PROTECT
-        void *mem_ptr        =             mmap (nullptr, data_size,        PROT_READ | PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-        stack_t *struct_copy = (stack_t *) mmap (nullptr, sizeof (stack_t), PROT_READ | PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+        void *mem_ptr        =             mmap (nullptr, data_size,        PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+        stack_t *struct_copy = (stack_t *) mmap (nullptr, sizeof (stack_t), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
 
         if (struct_copy == nullptr) { return res::NOMEM; }
     #else
@@ -98,7 +104,7 @@ err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity
     if (mem_ptr ==  nullptr) { return res::NOMEM; }
 
     // Set data pointer
-    stk->data     = mem_ptr;
+    stk->data = mem_ptr;
 
     // Protection initialising
     #ifndef NDEBUG
@@ -106,14 +112,7 @@ err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity
         else                        stk->print_func = byte_fprintf;
     #endif
 
-    #if STACK_DUNGEON_MASTER_PROTECT
-        stk->two_blocks_up   = dungeon_master_val;
-        stk->two_blocks_down = dungeon_master_val;
-
-        *(dungeon_master_t*)stk->data = dungeon_master_val;
-        stk->data = (dungeon_master_t*)stk->data + 1;
-        * (dungeon_master_t *) ((char *)stk->data + stk->capacity * stk->obj_size) = dungeon_master_val;
-    #endif
+    init_dungeon_master_protection (stk);
 
     #if STACK_KSP_PROTECT
         memset (stk->data, POISON_BYTE, capacity*obj_size);
@@ -155,23 +154,13 @@ err_flags stack_resize (stack_t *stk, size_t new_capacity)
     stack_assert (stk);
     assert (stk->size <= new_capacity);
 
-    size_t new_data_size = new_capacity*stk->obj_size;
+    size_t new_data_size = get_data_size (new_capacity, stk->obj_size);
+
     #if STACK_DUNGEON_MASTER_PROTECT
     stk->data = ((dungeon_master_t*) stk->data) - 1;
-    new_data_size += 2*sizeof (dungeon_master_t);
     #endif
 
-    #if STACK_MEMORY_PROTECT
-        void *new_data_ptr = mmap (nullptr, new_data_size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-        if (new_data_ptr == nullptr) return res::NOMEM;
-
-        size_t stack_size = stack_data_size (stk);
-        memcpy (new_data_ptr, stk->data, stack_size);
-        munmap (stk->data, stack_size);
-    #else
-        void *new_data_ptr = realloc (stk->data, new_data_size); // Не заполняет нулями
-    #endif
-
+    void *new_data_ptr = cust_realloc (stk->data, get_data_size (stk->capacity, stk->obj_size), new_data_size);
     if (new_data_ptr == nullptr) return res::NOMEM;
 
     #if STACK_DUNGEON_MASTER_PROTECT
@@ -308,7 +297,7 @@ err_flags stack_dtor (stack_t *stk)
     #endif
 
     #if STACK_MEMORY_PROTECT
-        munmap (stk->data,        stack_data_size (stk));
+        munmap (stk->data,        get_data_size (stk->capacity, stk->obj_size));
         munmap (stk->struct_copy, sizeof (stack_t));
     #else
         free (stk->data);
@@ -365,7 +354,12 @@ void stack_dump (stack_t *stk, FILE *stream)
                      "    object size: %lu\n"
                      "    reserved size: %lu\n\n",
                      stk->size, stk->capacity, stk->obj_size, stk->reserved);
-    fprintf (stream, "Stack data[%p]\n", stk->data);
+    fprintf (stream, "Enabled security options:\n");
+    fprintf (stream, "[%c] Memory protection\n", STACK_MEMORY_PROTECT         ? '+' : '-');
+    fprintf (stream, "[%c] Canary protection\n", STACK_DUNGEON_MASTER_PROTECT ? '+' : '-');
+    fprintf (stream, "[%c] Hash protection\n",   STACK_HASH_PROTECT           ? '+' : '-');
+    fprintf (stream, "[%c] Poison protection\n", STACK_KSP_PROTECT            ? '+' : '-');
+    fprintf (stream, "\nStack data[%p]\n", stk->data);
 
     for (size_t i = 0; i < stk->capacity; ++i)
     {
@@ -376,14 +370,29 @@ void stack_dump (stack_t *stk, FILE *stream)
         #else
             byte_fprintf((char *) stk->data + i*stk->obj_size, stk->obj_size, stream);
         #endif
+
+        #if STACK_KSP_PROTECT
+            bool is_poison = true;
+            for (size_t j = 0; j < stk->obj_size; ++j)
+            {   
+                if (*((unsigned char *) stk->data + i*stk->obj_size +j) != POISON_BYTE) 
+                {
+                    is_poison = false;
+                }
+            }
+
+            if (is_poison) fprintf (stream, "%s (POISON)" D, (i < stk->size) ? R : Cyan);
+        #endif   
+         
+        fputc ('\n', stream);
     }
 
     fprintf (stream, R Bold "======== END STACK DUMP =======\n\n" Plain D);
 }
 
-#define _if_log(res, message)                                  \
-{                                                              \
-    if (errors & res)                                          \
+#define _if_log(res, message)                                       \
+{                                                                   \
+    if (errors & res)                                               \
         fprintf (stream, "%s" message "\n", prefix ? prefix : "");  \
 }
 
@@ -522,7 +531,7 @@ static void memory_check (const stack_t *stk, err_flags *errs)
     #endif
 }
 
-void byte_fprintf (void *elem, size_t elem_size, FILE *stream)
+void byte_fprintf (const void *elem, size_t elem_size, FILE *stream)
 {
     assert (elem   != nullptr && "pointer can't be null");
     assert (stream != nullptr && "pointer can't be null");
@@ -533,24 +542,24 @@ void byte_fprintf (void *elem, size_t elem_size, FILE *stream)
         bool is_poison = false;
     #endif
 
+    const unsigned char *elem_c = (const unsigned char *) elem;
+
     for (size_t j = 0; j < elem_size; ++j)
     {   
         #if STACK_KSP_PROTECT
-            if (((unsigned char *)elem)[j] != POISON_BYTE) 
+            if (elem_c[j] != POISON_BYTE) 
             {
                 is_poison = false;
             }
         #endif
 
-        fprintf (stream, "|0x%08x|", ((unsigned char *)elem)[j]);
+        fprintf (stream, "|0x%08x|", elem_c[j]);
     }
 
     if (is_poison)
     {
         fprintf (stream, "(POISON)"); 
     }
-
-    fprintf (stream, "\n");
 }
 
 static inline void unlock_copy (stack_t *stk)
@@ -623,12 +632,43 @@ static inline void update_hash (stack_t *stk)
     assert (stack_verify (stk) == OK);
 }
 
-static size_t stack_data_size (const stack_t *stk)
+static size_t get_data_size (size_t capacity, size_t obj_size)
 {
-    size_t data_size = stk->capacity*stk->obj_size;
+    size_t data_size = capacity*obj_size;
     #if STACK_DUNGEON_MASTER_PROTECT
         data_size += 2*sizeof (dungeon_master_t);
     #endif
 
     return data_size;
+}
+
+static void *cust_realloc (void *prev_ptr, size_t prev_size, size_t new_size)
+{
+    #if STACK_MEMORY_PROTECT
+        void *new_ptr = mmap (nullptr, new_size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+        if (new_ptr == nullptr) return nullptr;
+
+        size_t stack_size = prev_size;
+        memcpy (new_ptr, prev_ptr, stack_size);
+        munmap (prev_ptr, stack_size);
+    #else
+        void *new_ptr = realloc (prev_ptr, new_size); // Не заполняет нулями
+    #endif
+
+    return new_ptr;
+}
+
+static void init_dungeon_master_protection (stack_t *stk)
+{
+    assert (stk       != nullptr);
+    assert (stk->data != nullptr);
+
+    #if STACK_DUNGEON_MASTER_PROTECT
+        stk->two_blocks_up   = dungeon_master_val;
+        stk->two_blocks_down = dungeon_master_val;
+
+        *(dungeon_master_t*)stk->data = dungeon_master_val;
+        stk->data = (dungeon_master_t*)stk->data + 1;
+        * (dungeon_master_t *) ((char *)stk->data + stk->capacity * stk->obj_size) = dungeon_master_val;
+    #endif
 }

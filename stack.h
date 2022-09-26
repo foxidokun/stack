@@ -15,7 +15,7 @@
 #endif
 
 #ifndef STACK_MEMORY_PROTECT
-#define STACK_MEMORY_PROTECT              1 // Hash protection
+#define STACK_MEMORY_PROTECT            1 // Memory protection
 #endif
 
 #include <stdlib.h>
@@ -29,7 +29,7 @@
 
 // ---------------- Types ----------------
 typedef unsigned short err_flags;
-typedef void (*elem_print_f) (void *elem, size_t elem_size, FILE *stream);
+typedef void (*elem_print_f) (const void *elem, size_t elem_size, FILE *stream);
 typedef uint64_t dungeon_master_t;
 
 enum res
@@ -140,7 +140,7 @@ err_flags stack_verify (stack_t *stk_mutable); // We need mutable stk for hash
 err_flags stack_verify (const stack_t *stk);
 #endif
 
-void byte_fprintf(void *elem, size_t elem_size, FILE *stream);
+void byte_fprintf (const void *elem, size_t elem_size, FILE *stream);
 
 // ---------------- Macros ----------------
 
@@ -171,6 +171,7 @@ void byte_fprintf(void *elem, size_t elem_size, FILE *stream);
     #undef STACK_KSP_PROTECT
     #undef STACK_DUNGEON_MASTER_PROTECT
     #undef STACK_HASH_PROTECT
+    #undef STACK_MEMORY_PROTECT
 #endif
 
 #endif // STACK_H

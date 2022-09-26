@@ -26,12 +26,13 @@
 // ---------------- Types ----------------
 typedef unsigned short err_flags;
 typedef void (*elem_print_f) (void *elem, size_t elem_size, FILE *stream);
+typedef uint64_t dungeon_master_t;
 
 enum res
 {
     OK                  = 0,
     NULLPTR             = 1<<0,
-    OVER_FILLED         = 1<<1,
+    INVALID_SIZE        = 1<<1,
     POISONED            = 1<<2,
     NOMEM               = 1<<3,
     EMPTY               = 1<<4,
@@ -55,25 +56,41 @@ struct stack_debug_t
 
 struct stack_t
 {
+    #if STACK_DUNGEON_MASTER_PROTECT
+    dungeon_master_t two_blocks_up;
+    #endif
+
     void *data;
     size_t size;
     size_t capacity;
     size_t obj_size;
     size_t reserved;
-    elem_print_f print_func;
 
     #ifndef NDEBUG
+    elem_print_f print_func;
     const stack_debug_t *debug_data;
     #endif
 
     #if STACK_HASH_PROTECT
+    hash_f hash_func;
     hash_t data_hash;
     hash_t struct_hash;
+    #endif
+
+    #if STACK_DUNGEON_MASTER_PROTECT
+    dungeon_master_t two_blocks_down;
     #endif
 };
 
 // ---------------- Functions ----------------
-err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity = 0, elem_print_f print_func = nullptr);
+err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity = 0
+#ifndef NDEBUG
+    , elem_print_f print_func = nullptr 
+#endif
+#if STACK_HASH_PROTECT    
+    , hash_f hash_func = nullptr
+#endif
+);
 
 #ifndef NDEBUG
     err_flags __stack_ctor_with_debug (stack_t *stk, const stack_debug_t *debug_data,
@@ -105,11 +122,15 @@ err_flags stack_pop (stack_t *stk, void *value);
 
 err_flags stack_dtor (stack_t *stk);
 
-void stack_dump (const stack_t *stk, FILE *stream);
+void stack_dump (stack_t *stk, FILE *stream);
 
 void stack_perror (err_flags errors, FILE *stream, const char *prefix = nullptr);
 
+#if STACK_HASH_PROTECT
+err_flags stack_verify (stack_t *stk_mutable); // We need mutable stk for hash
+#else
 err_flags stack_verify (const stack_t *stk);
+#endif
 
 err_flags data_poison_check (const stack_t *stk);
 

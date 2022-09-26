@@ -10,37 +10,73 @@ const unsigned char __const_memory_val = 228;
 const void *const POISON_PTR = &__const_memory_val;
 const unsigned char POISON_BYTE = (unsigned char) -7u;
 
-typedef uint64_t dungeon_master_t;
 const dungeon_master_t dungeon_master_val = 0x1000DEAD7;
 
-err_flags stack_verify (const stack_t *stk)
-{
+#if STACK_HASH_PROTECT
+err_flags stack_verify (stack_t *stk_mutable) { // We need not const stk for hash
+    const stack_t *stk = (const stack_t *) stk_mutable;
+#else
+err_flags stack_verify (const stack_t *stk) {
+#endif
+
     err_flags ret = res::OK;
+    const err_flags data_is_not_ok = DATA_NULL | DATA_CORRUPTED | POISONED | BAD_CAPACITY | INVALID_OBJ_SIZE | STRUCT_CORRUPTED;
 
     if (stk == nullptr) return res::NULLPTR;
 
-    if (stk->size > stk->capacity)      ret |= res::OVER_FILLED;
+    if (stk->size > stk->capacity)      ret |= res::INVALID_SIZE;
     if (stk->capacity < stk->reserved)  ret |= res::BAD_CAPACITY;
     if (stk->obj_size == 0)             ret |= res::INVALID_OBJ_SIZE;
-    if (stk->print_func == nullptr)     ret |= res::INVALID_FUNC;
     if (stk->data == nullptr)           ret |= res::DATA_NULL;
 
+    #ifndef NDEBUG 
+        if (stk->print_func == nullptr) ret |= res::INVALID_FUNC;
+    #endif
+
     #if STACK_KSP_PROTECT
-        if (stk->data != nullptr)
+        if (!(ret & (data_is_not_ok | INVALID_SIZE)))
         {
             ret |= data_poison_check (stk);
         } 
     #endif
 
     #if STACK_DUNGEON_MASTER_PROTECT
-        if (((dungeon_master_t *)stk->data)[-1] != dungeon_master_val)
+        if (stk->two_blocks_up != dungeon_master_val || stk->two_blocks_down != dungeon_master_val)
         {
-            ret |= DATA_CORRUPTED;
+            ret |= STRUCT_CORRUPTED;
         }
 
-        if (* (dungeon_master_t *) ((char *)stk->data + stk->capacity * stk->obj_size) != dungeon_master_val)
+        if (!(ret & data_is_not_ok))
         {
-            ret |= DATA_CORRUPTED;
+            if (((dungeon_master_t *)stk->data)[-1] != dungeon_master_val)
+            {
+                ret |= DATA_CORRUPTED;
+            }
+
+            if (* (dungeon_master_t *) ((char *)stk->data + stk->capacity * stk->obj_size) != dungeon_master_val)
+            {
+                ret |= DATA_CORRUPTED;
+            }
+        }
+    #endif
+
+    #if STACK_HASH_PROTECT
+        if (stk->hash_func == nullptr) { ret |= INVALID_FUNC; }
+        else {
+            const hash_t struct_hash = stk->struct_hash;
+            stk_mutable->struct_hash = 0;
+
+            if (stk->hash_func (stk, sizeof (stack_t)) != struct_hash)
+            {
+                ret |= STRUCT_CORRUPTED;
+            }
+            stk_mutable->struct_hash = struct_hash;
+
+            size_t data_size = stk->capacity * stk->obj_size;
+            if ((!(ret & data_is_not_ok)) & (stk->hash_func (stk->data, data_size) != stk->data_hash))
+            {
+                ret |= DATA_CORRUPTED;
+            }
         }
     #endif
 
@@ -84,7 +120,14 @@ err_flags data_poison_check (const stack_t *stk)
     return OK;
 }
 
-err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity, elem_print_f print_func)
+err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity
+#ifndef NDEBUG
+    , elem_print_f print_func
+#endif
+#if STACK_HASH_PROTECT    
+    , hash_f hash_func
+#endif
+)
 {
     assert (obj_size > 0 && "object size cant be 0");
 
@@ -102,17 +145,29 @@ err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity, elem_pri
     stk->size     = 0;
     stk->obj_size = obj_size;
 
-    if (print_func != nullptr)  stk->print_func = print_func;
-    else                        stk->print_func = byte_fprintf;
+    #ifndef NDEBUG
+        if (print_func != nullptr)  stk->print_func = print_func;
+        else                        stk->print_func = byte_fprintf;
+    #endif
+
+    #if STACK_DUNGEON_MASTER_PROTECT
+        stk->two_blocks_up   = dungeon_master_val;
+        stk->two_blocks_down = dungeon_master_val;
+
+        *(dungeon_master_t*)stk->data = dungeon_master_val;
+        stk->data = (dungeon_master_t*)stk->data + 1;
+        * (dungeon_master_t *) ((char *)stk->data + stk->capacity * stk->obj_size) = dungeon_master_val;
+    #endif
 
     #if STACK_KSP_PROTECT
         memset (stk->data, POISON_BYTE, capacity*obj_size);
     #endif
 
-    #if STACK_DUNGEON_MASTER_PROTECT
-        *(dungeon_master_t*)stk->data = dungeon_master_val;
-        stk->data = (dungeon_master_t*)stk->data + 1;
-        * (dungeon_master_t *) ((char *)stk->data + stk->capacity * stk->obj_size) = dungeon_master_val;
+    #if STACK_HASH_PROTECT
+        stk->hash_func   = (hash_func != nullptr) ? hash_func : djb2;
+        stk->struct_hash = 0;
+        stk->data_hash   = stk->hash_func (stk->data, stk->capacity * stk->obj_size);
+        stk->struct_hash = stk->hash_func (stk, sizeof (stack_t));
     #endif
 
     stack_assert (stk);
@@ -164,6 +219,12 @@ err_flags stack_resize (stack_t *stk, size_t new_capacity)
     stk->data     = new_data_ptr;
     stk->capacity = new_capacity;
 
+    #if STACK_HASH_PROTECT
+        stk->struct_hash = 0;
+        stk->data_hash   = stk->hash_func (stk->data, stk->capacity * stk->obj_size);
+        stk->struct_hash = stk->hash_func (stk, sizeof (stack_t));
+    #endif
+
     stack_assert (stk);
     return res::OK;
 }
@@ -192,6 +253,12 @@ err_flags stack_pop (stack_t *stk, void *value)
 
     #if STACK_KSP_PROTECT
         memset ((char* ) stk->data + stk->size*stk->obj_size, POISON_BYTE, stk->obj_size);
+    #endif
+
+    #if STACK_HASH_PROTECT
+        stk->struct_hash = 0;
+        stk->data_hash   = stk->hash_func (stk->data, stk->capacity * stk->obj_size);
+        stk->struct_hash = stk->hash_func (stk, sizeof (stack_t));
     #endif
 
     if (stk->capacity>>2 >= stk->size)
@@ -230,6 +297,12 @@ err_flags stack_push (stack_t *stk, const void *value)
     memcpy ((char* ) stk->data + stk->size*stk->obj_size, value, stk->obj_size);
     stk->size++;
 
+    #if STACK_HASH_PROTECT
+        stk->struct_hash = 0;
+        stk->data_hash   = stk->hash_func (stk->data, stk->capacity * stk->obj_size);
+        stk->struct_hash = stk->hash_func (stk, sizeof (stack_t));
+    #endif
+
     stack_assert (stk);
     return res::OK;
 }
@@ -243,12 +316,12 @@ err_flags stack_dtor (stack_t *stk)
         if (check_res != OK) log(log::WRN, "Destructor called on invalid object with error flags: 0x%x, see stack_perror", check_res);
     #endif
 
-    #if STACK_DUNGEON_MASTER_PROTECT
-        stk->data = ((dungeon_master_t*) stk->data) - 1;
-    #endif
-
     #if STACK_KSP_PROTECT
         memset ((char* ) stk->data, POISON_BYTE, stk->obj_size * stk->capacity);
+    #endif
+
+    #if STACK_DUNGEON_MASTER_PROTECT
+        stk->data = ((dungeon_master_t*) stk->data) - 1;
     #endif
 
     free (stk->data);
@@ -265,7 +338,7 @@ err_flags stack_dtor (stack_t *stk)
     return res::OK;
 }
 
-void stack_dump (const stack_t *stk, FILE *stream)
+void stack_dump (stack_t *stk, FILE *stream)
 {
     fprintf (stream, R Bold "\n======== STACK DUMP =======\n" Plain D);
 
@@ -274,10 +347,19 @@ void stack_dump (const stack_t *stk, FILE *stream)
         fprintf (stream, "Stack ptr is nullptr\n");
         return;
     }
-    if (stack_verify (stk) & res::POISONED)
+
+    err_flags check_res = stack_verify (stk);
+
+    if (check_res & res::POISONED)
     {
         fprintf (stream, "Stack " R "POISONED" D "\n");
         return;
+    }
+
+    if (check_res != OK)
+    {
+        fprintf (stream, "Stack has errors: \n");
+        stack_perror(check_res, stream, "-> ");
     }
 
     #ifndef NDEBUG
@@ -300,7 +382,12 @@ void stack_dump (const stack_t *stk, FILE *stream)
     for (size_t i = 0; i < stk->capacity; ++i)
     {
         fprintf (stream, "%c data[%03lu]: ", (i<stk->size ? '*' : ' '), i);
-        stk->print_func ((char *) stk->data + i*stk->obj_size, stk->obj_size, stream);
+
+        #ifndef NDEBUG
+            stk->print_func ((char *) stk->data + i*stk->obj_size, stk->obj_size, stream);
+        #else
+            byte_fprintf((char *) stk->data + i*stk->obj_size, stk->obj_size, stream);
+        #endif
     }
 
     fprintf (stream, R Bold "======== END STACK DUMP =======\n\n" Plain D);
@@ -309,24 +396,24 @@ void stack_dump (const stack_t *stk, FILE *stream)
 #define _if_log(res, message)                                  \
 {                                                              \
     if (errors & res)                                          \
-        fprintf (stream, "%s" message, prefix ? prefix : "");  \
+        fprintf (stream, "%s" message "\n", prefix ? prefix : "");  \
 }
 
 void stack_perror (err_flags errors, FILE *stream, const char *prefix)
 {
     _if_log (NULLPTR         , "Stack pointer is nullptr");
-    _if_log (OVER_FILLED     , "Used > capacity");
+    _if_log (INVALID_SIZE    , "Used > capacity");
     _if_log (POISONED        , "Use after deconstructor");
     _if_log (NOMEM           , "Out of memory");
     _if_log (EMPTY           , "Pop from empty stack");
     _if_log (BAD_CAPACITY    , "Capacity < reserved");
     _if_log (DATA_CORRUPTED  , "Internal data buffer is corrupted");
-    _if_log (STRUCT_CORRUPTED, "Struct id corrupted");
+    _if_log (STRUCT_CORRUPTED, "Struct is corrupted");
     _if_log (INVALID_OBJ_SIZE, "Invalid object size = 0");
     _if_log (INVALID_FUNC    , "Nullptr function pointer");
     _if_log (DATA_NULL       , "Data pointer is nullptr");
 
-    assert ((errors & ~(NULLPTR | OVER_FILLED | POISONED | NOMEM | EMPTY | BAD_CAPACITY | DATA_CORRUPTED
+    assert ((errors & ~(NULLPTR | INVALID_SIZE | POISONED | NOMEM | EMPTY | BAD_CAPACITY | DATA_CORRUPTED
                     | STRUCT_CORRUPTED | INVALID_OBJ_SIZE | INVALID_FUNC | DATA_NULL)) == 0 && "Unexpected error");
 }
 

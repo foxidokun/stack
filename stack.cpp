@@ -8,6 +8,7 @@
 
 #if STACK_MEMORY_PROTECT
 #include <sys/mman.h>
+#include <unistd.h>
 #endif
 
 // ---- ---- ---- --- CONSTS ---- ---- ---- ----
@@ -39,6 +40,7 @@ static size_t get_data_size (size_t capacity, size_t obj_size);
 
 static void *cust_realloc (void *prev_ptr, size_t prev_size, size_t new_size);
 
+static err_flags stack_data_init (stack_t *stk, size_t reserved, size_t obj_size);
 static void init_dungeon_master_protection (stack_t *stk);
 
 // ---- ---- ---- --- IMPLEMENTATIONS ---- ---- ---- ----
@@ -91,28 +93,8 @@ err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity
     assert (obj_size > 0   && "object size cant be 0");
     assert (stk != nullptr && "pointer can't be null");
 
-    // Field initialising
-    stk->capacity = capacity;
-    stk->reserved = capacity;
-    stk->size     = 0;
-    stk->obj_size = obj_size;
-
-    // Memory allocation
-    size_t data_size = get_data_size (stk->capacity, stk->obj_size);
-
-    #if STACK_MEMORY_PROTECT
-        void *mem_ptr        =             mmap (nullptr, data_size,        PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-        stack_t *struct_copy = (stack_t *) mmap (nullptr, sizeof (stack_t), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-
-        if (struct_copy == nullptr) { return res::NOMEM; }
-    #else
-        void *mem_ptr = calloc (data_size, 1); // Works even with capacity = 0
-    #endif
-
-    if (mem_ptr ==  nullptr) { return res::NOMEM; }
-
-    // Set data pointer
-    stk->data = mem_ptr;
+    // Data & fields initialisation
+    stack_data_init (stk, capacity, obj_size);
 
     // Protection initialising
     #ifndef NDEBUG
@@ -123,7 +105,7 @@ err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity
     init_dungeon_master_protection (stk);
 
     #if STACK_KSP_PROTECT
-        memset (stk->data, POISON_BYTE, capacity*obj_size);
+        memset (stk->data, POISON_BYTE, stk->capacity*obj_size);
     #endif
 
     #if STACK_HASH_PROTECT
@@ -131,7 +113,6 @@ err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity
     #endif
     
     #if STACK_MEMORY_PROTECT
-        stk->struct_copy = struct_copy;
         memcpy (stk->struct_copy, stk, sizeof (stack_t));
     #endif
 
@@ -165,6 +146,11 @@ err_flags stack_resize (stack_t *stk, size_t new_capacity)
 {
     stack_assert (stk);
     assert (stk->size <= new_capacity);
+    
+    if (new_capacity < stk->reserved)
+    {
+        return res::BAD_CAPACITY;
+    }
 
     size_t new_data_size = get_data_size (new_capacity, stk->obj_size);
 
@@ -350,17 +336,13 @@ void stack_dump (stack_t *stk, FILE *stream)
 
     err_flags check_res = stack_verify (stk);
 
-    if (check_res & res::POISONED)
-    {
-        fprintf (stream, "Stack " R "POISONED" D "\n");
-        return;
-    }
-
     if (check_res != OK)
     {
         fprintf (stream, "Stack has errors: \n");
         stack_perror(check_res, stream, "-> ");
     }
+
+    if (check_res & res::POISONED) { return; }
 
     #ifndef NDEBUG
         fprintf (stream, "Stack[%p] with name " Bold "%s" Plain 
@@ -697,9 +679,8 @@ static void *cust_realloc (void *prev_ptr, size_t prev_size, size_t new_size)
         void *new_ptr = mmap (nullptr, new_size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
         if (new_ptr == nullptr) return nullptr;
 
-        size_t stack_size = prev_size;
-        memcpy (new_ptr, prev_ptr, stack_size);
-        munmap (prev_ptr, stack_size);
+        memcpy (new_ptr, prev_ptr, (prev_size < new_size) ? prev_size : new_size);
+        munmap (prev_ptr, prev_size);
     #else
         void *new_ptr = realloc (prev_ptr, new_size); // Не заполняет нулями
     #endif
@@ -722,4 +703,44 @@ static void init_dungeon_master_protection (stack_t *stk)
         stk->data = (dungeon_master_t*)stk->data + 1;
         * (dungeon_master_t *) ((char *)stk->data + stk->capacity * stk->obj_size) = dungeon_master_val;
     #endif
+}
+
+// ------------------------------------------------------------------------------------
+
+static err_flags stack_data_init (stack_t *stk, size_t reserved, size_t obj_size)
+{
+    assert (stk != nullptr && "pointer can't be null");
+    assert (obj_size > 0 && "invalid obj size");
+
+    stk->obj_size = obj_size;
+
+    #if STACK_MEMORY_PROTECT
+        size_t objects_in_mempage = sysconf (_SC_PAGESIZE) / obj_size;
+        reserved = (reserved > objects_in_mempage) ? reserved : objects_in_mempage;
+    #endif
+
+    size_t data_size = get_data_size (reserved, obj_size);
+
+    #if STACK_MEMORY_PROTECT
+        void *mem_ptr        =             mmap (nullptr, data_size,        PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+        stack_t *struct_copy = (stack_t *) mmap (nullptr, sizeof (stack_t), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+
+        if (struct_copy == nullptr) { return res::NOMEM; }
+    #else
+        void *mem_ptr = calloc (data_size, 1); // Works even with capacity = 0
+    #endif
+
+    if (mem_ptr ==  nullptr) { return res::NOMEM; }
+
+    // Set data pointer
+    stk->data = mem_ptr;
+    stk->capacity = reserved;
+    stk->reserved = reserved;
+    stk->size     = 0;
+
+    #if STACK_MEMORY_PROTECT
+    stk->struct_copy = struct_copy;
+    #endif
+    
+    return res::OK;
 }

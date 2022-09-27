@@ -32,6 +32,19 @@
     }                                                           \
 }
 
+#if !STACK_MEMORY_PROTECT
+    #define _ASSERT_IFNMEM(cond) _ASSERT (cond)
+#else
+    #define _ASSERT_IFNMEM(cond)
+#endif
+
+#if STACK_MEMORY_PROTECT
+    #define _ASSERT_IFMEM(cond) _ASSERT (cond)
+#else
+    #define _ASSERT_IFMEM(cond)
+#endif
+
+
 // ----- TESTS ------
 
 int test_stack_ctor_notinit ()
@@ -40,7 +53,7 @@ int test_stack_ctor_notinit ()
     stack_ctor (&stk, sizeof (int));
 
     _ASSERT (stk.size == 0);
-    _ASSERT (stk.capacity == 0);
+    _ASSERT_IFNMEM (stk.capacity == 0);
     _ASSERT (stk.obj_size == sizeof (int));
 
     stack_dtor (&stk);
@@ -53,7 +66,7 @@ int test_stack_ctor_init ()
     stack_ctor (&stk, sizeof (int));
 
     _ASSERT (stk.size == 0);
-    _ASSERT (stk.capacity == 0);
+    _ASSERT_IFNMEM (stk.capacity == 0);
     _ASSERT (stk.obj_size == sizeof (int));
 
     stack_dtor (&stk);
@@ -86,9 +99,10 @@ int test_stack_push_pop_manual_realloc ()
 
     const int new_capacity = 8;
 
-    _ASSERT (stack_resize(&stk, new_capacity) == res::OK);
+    _ASSERT_IFNMEM (stack_resize(&stk, new_capacity) == res::OK);
+    _ASSERT_IFMEM  (stack_resize(&stk, new_capacity) == res::BAD_CAPACITY);
     _ASSERT (stk.size == 0);
-    _ASSERT (stk.capacity == new_capacity);
+    _ASSERT_IFNMEM (stk.capacity == new_capacity);
 
     for (int i = 0; i < new_capacity; ++i)
     {
@@ -96,7 +110,7 @@ int test_stack_push_pop_manual_realloc ()
     }
 
     _ASSERT (stk.size == new_capacity);
-    _ASSERT (stk.capacity == new_capacity);
+    _ASSERT_IFNMEM (stk.capacity == new_capacity);
 
     int poped = 0;
 
@@ -122,7 +136,7 @@ int test_stack_push_pop_auto_realloc ()
         _ASSERT (stack_push(&stk, &i) == res::OK);
     }
 
-    _ASSERT (stk.capacity == 256);
+    _ASSERT_IFNMEM (stk.capacity == 256);
     int poped = 0;
 
     for (int i = new_capacity - 1; i >= 0; --i)
@@ -150,14 +164,14 @@ int test_stack_push_pop_auto_shrink ()
     }
 
     _ASSERT (stk.size == new_capacity);
-    _ASSERT (stk.capacity == new_capacity);
+    _ASSERT_IFNMEM (stk.capacity == new_capacity);
 
     for (size_t i = 8; i < new_capacity; ++i)
     {
         _ASSERT (stack_pop (&stk, &tmp) == res::OK);
     }
 
-    _ASSERT (stk.capacity == 16);
+    _ASSERT_IFNMEM (stk.capacity == 16);
     _ASSERT (stk.size == 8);
 
     for (int i = 0; i < 8; ++i)
@@ -165,7 +179,7 @@ int test_stack_push_pop_auto_shrink ()
         _ASSERT (stack_pop (&stk, &tmp) == res::OK);
     }
 
-    _ASSERT (stk.capacity == 16);
+    _ASSERT_IFNMEM (stk.capacity == 16);
     _ASSERT (stk.size == 0);
 
     stack_dtor (&stk);

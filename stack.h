@@ -171,11 +171,4 @@ void byte_fprintf (const void *elem, size_t elem_size, FILE *stream);
 
 #define UNWRAP(val) { if (val != res::OK) { return val; } }
 
-#ifndef STACK_CPP
-    #undef STACK_KSP_PROTECT
-    #undef STACK_DUNGEON_MASTER_PROTECT
-    #undef STACK_HASH_PROTECT
-    #undef STACK_MEMORY_PROTECT
-#endif
-
 #endif // STACK_H

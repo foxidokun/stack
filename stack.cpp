@@ -162,6 +162,7 @@ err_flags stack_resize (stack_t *stk, size_t new_capacity)
     if (new_data_ptr == nullptr) return res::NOMEM;
 
     #if STACK_DUNGEON_MASTER_PROTECT
+        mprotect (new_data_ptr, new_data_size, PROT_WRITE|PROT_READ);
         new_data_ptr = ((dungeon_master_t*) new_data_ptr) + 1;
         * ((dungeon_master_t *) ((char *)new_data_ptr + new_capacity * stk->obj_size)) = dungeon_master_val;
     #endif
@@ -676,11 +677,8 @@ static size_t get_data_size (size_t capacity, size_t obj_size)
 static void *cust_realloc (void *prev_ptr, size_t prev_size, size_t new_size)
 {
     #if STACK_MEMORY_PROTECT
-        void *new_ptr = mmap (nullptr, new_size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-        if (new_ptr == nullptr) return nullptr;
-
-        memcpy (new_ptr, prev_ptr, (prev_size < new_size) ? prev_size : new_size);
-        munmap (prev_ptr, prev_size);
+        void *new_ptr = mremap (prev_ptr, prev_size, new_size, MREMAP_MAYMOVE);
+        if (new_ptr == MAP_FAILED) return nullptr;
     #else
         void *new_ptr = realloc (prev_ptr, new_size); // Не заполняет нулями
     #endif
@@ -725,12 +723,12 @@ static err_flags stack_data_init (stack_t *stk, size_t reserved, size_t obj_size
         void *mem_ptr        =             mmap (nullptr, data_size,        PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
         stack_t *struct_copy = (stack_t *) mmap (nullptr, sizeof (stack_t), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
 
-        if (struct_copy == nullptr) { return res::NOMEM; }
+        if (struct_copy == MAP_FAILED) { return res::NOMEM; }
+        if (mem_ptr == MAP_FAILED) { return res::NOMEM; }
     #else
         void *mem_ptr = calloc (data_size, 1); // Works even with capacity = 0
+        if (mem_ptr == nullptr) { return res::NOMEM; }
     #endif
-
-    if (mem_ptr ==  nullptr) { return res::NOMEM; }
 
     // Set data pointer
     stk->data = mem_ptr;

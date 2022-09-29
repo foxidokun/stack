@@ -162,7 +162,9 @@ err_flags stack_resize (stack_t *stk, size_t new_capacity)
     if (new_data_ptr == nullptr) return res::NOMEM;
 
     #if STACK_DUNGEON_MASTER_PROTECT
+        #if STACK_MEMORY_PROTECT
         mprotect (new_data_ptr, new_data_size, PROT_WRITE|PROT_READ);
+        #endif
         new_data_ptr = ((dungeon_master_t*) new_data_ptr) + 1;
         * ((dungeon_master_t *) ((char *)new_data_ptr + new_capacity * stk->obj_size)) = dungeon_master_val;
     #endif
@@ -401,11 +403,13 @@ void stack_dump (stack_t *stk, FILE *stream)
 #define _if_log(res, message)                                       \
 {                                                                   \
     if (errors & res)                                               \
-        fprintf (stream, "%s" message "\n", prefix ? prefix : "");  \
+        fprintf (stream, "%s" message "\n", prefix==nullptr ? prefix : "");  \
 }
 
 void stack_perror (err_flags errors, FILE *stream, const char *prefix)
 {
+    assert (stream != nullptr && "pointer can't be null");
+
     _if_log (NULLPTR         , "Stack pointer is nullptr");
     _if_log (INVALID_SIZE    , "Used > capacity");
     _if_log (POISONED        , "Use after deconstructor");
@@ -481,6 +485,9 @@ static void data_poison_check (const stack_t *stk, err_flags *errs)
 
 static void dungeon_master_check (const stack_t *stk, err_flags *errs)
 {
+    assert (stk  != nullptr && "pointer can't be null");
+    assert (errs != nullptr && "pointer can't be null");
+
     #if STACK_DUNGEON_MASTER_PROTECT
     if (stk->two_blocks_up != dungeon_master_val || stk->two_blocks_down != dungeon_master_val)
     {
@@ -506,6 +513,9 @@ static void dungeon_master_check (const stack_t *stk, err_flags *errs)
 
 static void hash_check (stack_t *stk_mutable, err_flags *errs)
 {
+    assert (stk_mutable != nullptr && "Pointer can't be null");
+    assert (errs        != nullptr && "Pointer can't be null");
+
     #if STACK_HASH_PROTECT
     const stack_t *stk = stk_mutable;
 
@@ -536,6 +546,9 @@ static void hash_check (stack_t *stk_mutable, err_flags *errs)
 
 static void memory_check (const stack_t *stk, err_flags *errs)
 {
+    assert (stk  != nullptr && "pointer can't be null");
+    assert (errs != nullptr && "pointer can't be null");
+
     #if STACK_MEMORY_PROTECT
         if (!(*errs & STRUCT_CORRUPTED))
         {
@@ -642,7 +655,7 @@ static inline void lock_data (stack_t *stk)
 
 static inline void update_hash (stack_t *stk)
 {
-    assert ((stack_verify (stk) & !(DATA_CORRUPTED & STRUCT_CORRUPTED)) == OK);
+    assert ((stack_verify (stk) & ~(DATA_CORRUPTED | STRUCT_CORRUPTED)) == OK);
 
     #if STACK_HASH_PROTECT
         stk->struct_hash = 0;
@@ -676,6 +689,8 @@ static size_t get_data_size (size_t capacity, size_t obj_size)
 
 static void *cust_realloc (void *prev_ptr, size_t prev_size, size_t new_size)
 {
+    assert (prev_ptr != nullptr && "pointer can't be null"); // Due to mremap limitations
+
     #if STACK_MEMORY_PROTECT
         void *new_ptr = mremap (prev_ptr, prev_size, new_size, MREMAP_MAYMOVE);
         if (new_ptr == MAP_FAILED) return nullptr;
@@ -708,12 +723,15 @@ static void init_dungeon_master_protection (stack_t *stk)
 static err_flags stack_data_init (stack_t *stk, size_t reserved, size_t obj_size)
 {
     assert (stk != nullptr && "pointer can't be null");
-    assert (obj_size > 0 && "invalid obj size");
+    assert (obj_size > 0   && "invalid obj size");
 
     stk->obj_size = obj_size;
 
     #if STACK_MEMORY_PROTECT
-        size_t objects_in_mempage = sysconf (_SC_PAGESIZE) / obj_size;
+        ssize_t pagesize = sysconf (_SC_PAGESIZE);
+        // As the sysconf man says the only error is EINVAL (invalid name) and I'm sure _SC_PAGESIZE is the correct value.
+        assert (pagesize != -1);
+        size_t objects_in_mempage = ((size_t) pagesize) / obj_size;
         reserved = (reserved > objects_in_mempage) ? reserved : objects_in_mempage;
     #endif
 

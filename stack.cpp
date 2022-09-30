@@ -13,17 +13,21 @@
 
 // ---- ---- ---- --- CONSTS ---- ---- ---- ----
 #if STACK_KSP_PROTECT
+/// Random const variable
 const unsigned char __const_memory_val = 228;
-const void *const POISON_PTR = &__const_memory_val; // Pointer to const memory
+/// Pointer to const memory
+const void *const POISON_PTR = &__const_memory_val;
 const unsigned char POISON_BYTE = (unsigned char) -7u;
 #endif
 
 const err_flags DATA_NOT_OKAY = DATA_NULL | DATA_CORRUPTED | POISONED | BAD_CAPACITY | INVALID_OBJ_SIZE | STRUCT_CORRUPTED;
 
+/// Canary value
 const dungeon_master_t dungeon_master_val = 0x1000DEAD7;
 
 // ---- ---- ---- --- PROTOTYPES ---- ---- ---- ----
 
+/// Memory protection: mprotect wrappers with #ifdef compilation
 static inline void unlock_copy (stack_t *stk);
 static inline void   lock_copy (stack_t *stk);
 static inline void unlock_data (stack_t *stk);
@@ -31,6 +35,7 @@ static inline void   lock_data (stack_t *stk);
 
 static inline void update_hash (stack_t *stk);
 
+/// Protection checkers with #ufdef compilation
 static void dungeon_master_check (const stack_t *stk, err_flags *errs);
 static void data_poison_check    (const stack_t *stk, err_flags *errs);
 static void hash_check           (      stack_t *stk, err_flags *errs);

@@ -36,6 +36,9 @@ static inline void current_time (char *buf, size_t buf_size);
  * @brief      Write to log stream time, file&line and your formatted message
  *
  * @param      lvl   Log level
+ * @param[in]  fmt   Format string
+ * @param[in]  file  File where log is called  
+ * @param      line  Line where log is called
  * @param      ...   printf parameters (format string & it's parameters)
  */
 #ifndef DISABLE_LOGS

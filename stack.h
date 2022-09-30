@@ -16,9 +16,9 @@
 
 #ifndef STACK_MEMORY_PROTECT
 #if (__linux__ || __unix__)
-    #define STACK_MEMORY_PROTECT            1 // Memory protection
+    #define STACK_MEMORY_PROTECT        1 // Memory protection
 #else
-    #define STACK_MEMORY_PROTECT            0
+    #define STACK_MEMORY_PROTECT        0
 #endif
 #endif
 
@@ -26,10 +26,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include "log.h"
-
-#if STACK_HASH_PROTECT
 #include "hash.h"
-#endif
 
 // ---------------- Types ----------------
 typedef unsigned short err_flags;
@@ -39,17 +36,17 @@ typedef uint64_t dungeon_master_t;
 enum res
 {
     OK                  = 0,
-    NULLPTR             = 1<<0,
-    INVALID_SIZE        = 1<<1,
-    POISONED            = 1<<2,
-    NOMEM               = 1<<3,
-    EMPTY               = 1<<4,
-    BAD_CAPACITY        = 1<<5,
-    DATA_CORRUPTED      = 1<<6,
-    STRUCT_CORRUPTED    = 1<<7,
-    INVALID_OBJ_SIZE    = 1<<8,
-    INVALID_FUNC        = 1<<9,
-    DATA_NULL           = 1<<10
+    NULLPTR             = 1 << 0,
+    INVALID_SIZE        = 1 << 1,
+    POISONED            = 1 << 2,
+    NOMEM               = 1 << 3,
+    EMPTY               = 1 << 4,
+    BAD_CAPACITY        = 1 << 5,
+    DATA_CORRUPTED      = 1 << 6,
+    STRUCT_CORRUPTED    = 1 << 7,
+    INVALID_OBJ_SIZE    = 1 << 8,
+    INVALID_FUNC        = 1 << 9,
+    DATA_NULL           = 1 << 10
 };
 
 #ifndef NDEBUG
@@ -95,18 +92,11 @@ struct stack_t
 };
 
 // ---------------- Functions ----------------
-err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity = 0
-#ifndef NDEBUG
-    , elem_print_f print_func = nullptr 
-#endif
-#if STACK_HASH_PROTECT    
-    , hash_f hash_func = nullptr
-#endif
-);
+err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity = 0, elem_print_f print_func = nullptr, hash_f hash_func = nullptr);
 
 #ifndef NDEBUG
     err_flags __stack_ctor_with_debug (stack_t *stk, const stack_debug_t *debug_data,
-                                    size_t obj_size, size_t capacity = 0, elem_print_f print_func = nullptr);
+                                    size_t obj_size, size_t capacity = 0, elem_print_f print_func = nullptr, hash_f hash_func = nullptr);
 
     #define stack_ctor(stk, obj_size, ...)                                          \
     {                                                                               \
@@ -138,11 +128,7 @@ void stack_dump (stack_t *stk, FILE *stream);
 
 void stack_perror (err_flags errors, FILE *stream, const char *prefix = nullptr);
 
-#if STACK_HASH_PROTECT
 err_flags stack_verify (stack_t *stk_mutable); // We need mutable stk for hash
-#else
-err_flags stack_verify (const stack_t *stk);
-#endif
 
 void byte_fprintf (const void *elem, size_t elem_size, FILE *stream);
 

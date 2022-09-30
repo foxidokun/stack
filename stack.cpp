@@ -45,18 +45,9 @@ static void init_dungeon_master_protection (stack_t *stk);
 
 // ---- ---- ---- --- IMPLEMENTATIONS ---- ---- ---- ----
 
-#if STACK_HASH_PROTECT
-
 err_flags stack_verify (stack_t *stk_mutable) // We need mutable stk for hash
 { 
     const stack_t *stk = (const stack_t *) stk_mutable;
-
-#else
-
-err_flags stack_verify (const stack_t *stk)
-{
-
-#endif
 
     err_flags ret = res::OK;
 
@@ -68,7 +59,7 @@ err_flags stack_verify (const stack_t *stk)
     if (stk->data == nullptr)           ret |= res::DATA_NULL;
 
     #ifndef NDEBUG 
-        if (stk->print_func == nullptr) ret &= res::INVALID_FUNC;
+        if (stk->print_func == nullptr) ret |= res::INVALID_FUNC;
     #endif
 
     data_poison_check (stk, &ret);
@@ -81,14 +72,7 @@ err_flags stack_verify (const stack_t *stk)
 
 // ------------------------------------------------------------------------------------
 
-err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity
-#ifndef NDEBUG
-    , elem_print_f print_func
-#endif
-#if STACK_HASH_PROTECT    
-    , hash_f hash_func
-#endif
-)
+err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity, elem_print_f print_func, hash_f hash_func)
 {
     assert (obj_size > 0   && "object size cant be 0");
     assert (stk != nullptr && "pointer can't be null");
@@ -130,7 +114,7 @@ err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity
 
 #ifndef NDEBUG
 err_flags __stack_ctor_with_debug (stack_t *stk, const stack_debug_t *debug_data,
-                                size_t obj_size, size_t capacity, elem_print_f print_func)
+                                size_t obj_size, size_t capacity, elem_print_f print_func, hash_f hash_func)
 {
     assert (stk != nullptr && "pointer can't be NULL");
 
@@ -234,11 +218,11 @@ err_flags stack_pop (stack_t *stk, void *value)
 
     update_hash (stk);
 
-    if (stk->capacity>>2 >= stk->size)
+    if (stk->capacity >> 2 >= stk->size)
     {
-        if (stk->capacity>>1 > stk->reserved)
+        if (stk->capacity >> 1 > stk->reserved)
         {
-            UNWRAP (stack_resize (stk, stk->capacity>>1));
+            UNWRAP (stack_resize (stk, stk->capacity >> 1));
         }
         else
         {
@@ -400,9 +384,9 @@ void stack_dump (stack_t *stk, FILE *stream)
 
 // ------------------------------------------------------------------------------------
 
-#define _if_log(res, message)                                       \
-{                                                                   \
-    if (errors & res)                                               \
+#define _if_log(res, message)                                                \
+{                                                                            \
+    if (errors & res)                                                        \
         fprintf (stream, "%s" message "\n", prefix==nullptr ? prefix : "");  \
 }
 
@@ -432,8 +416,8 @@ void stack_perror (err_flags errors, FILE *stream, const char *prefix)
 
 static void data_poison_check (const stack_t *stk, err_flags *errs)
 {
-    assert (stk != nullptr && "In this function stk can't be null");
-    assert (stk->data != nullptr && "Stack data in this function can't be null");
+    assert (stk  != nullptr && "In this function stk can't be null");
+    assert (errs != nullptr && "Errors pointer can't be null");
 
     #if STACK_KSP_PROTECT
     if ((*errs & (DATA_NOT_OKAY | INVALID_SIZE)))
@@ -523,11 +507,9 @@ static void hash_check (stack_t *stk_mutable, err_flags *errs)
     else {
         const hash_t struct_hash = stk->struct_hash;
         
-        unlock_copy (stk_mutable);
         stk_mutable->struct_hash = 0;
-        lock_copy (stk_mutable);
 
-        if (stk->hash_func (stk, stk->obj_size) != struct_hash)
+        if (stk->hash_func (stk, sizeof (stk)) != struct_hash)
         {
             *errs |= STRUCT_CORRUPTED;
         }
@@ -554,7 +536,7 @@ static void memory_check (const stack_t *stk, err_flags *errs)
         {
             if (memcmp (stk, stk->struct_copy, sizeof (stack_t)) != 0)
             {
-                *errs &= STRUCT_CORRUPTED;
+                *errs |= STRUCT_CORRUPTED;
             }
         }
     #endif
@@ -660,7 +642,7 @@ static inline void update_hash (stack_t *stk)
     #if STACK_HASH_PROTECT
         stk->struct_hash = 0;
         stk->data_hash   = stk->hash_func (stk->data, stk->capacity * stk->obj_size);
-        stk->struct_hash = stk->hash_func (stk, stk->obj_size);
+        stk->struct_hash = stk->hash_func (stk, sizeof (stk));
 
         #if STACK_MEMORY_PROTECT
             unlock_copy (stk);

@@ -33,3 +33,8 @@ $(BINDIR):
 
 $(ODIR)/%.o: %.cpp $(DEPS)
 	g++ -c -o $@ $< $(CFLAGS)
+
+build: libstack.o
+
+libstack.o: $(ODIR) $(OBJ)
+	ld -relocatable $(OBJ) -o libstack.o

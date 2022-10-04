@@ -125,7 +125,7 @@ err_flags __stack_ctor_with_debug (stack_t *stk, const stack_debug_t *debug_data
 
     stk->debug_data = debug_data;
 
-    return __stack_ctor (stk, obj_size, capacity, print_func);
+    return __stack_ctor (stk, obj_size, capacity, print_func, hash_func);
 }
 #endif
 

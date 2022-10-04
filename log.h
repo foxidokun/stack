@@ -16,7 +16,7 @@ enum class log
 const size_t __TIME_BUF_SIZE = 10;
 
 #ifndef __LOG_CPP
-extern log __LOG_LEVEL;
+extern enum log __LOG_LEVEL;
 extern FILE *__LOG_OUT_STREAM;
 #endif
 
@@ -43,7 +43,7 @@ static inline void current_time (char *buf, size_t buf_size);
  */
 #ifndef DISABLE_LOGS
 
-void _log (log lvl, const char *fmt, const char *file, unsigned int line, ...);
+void _log (enum log lvl, const char *fmt, const char *file, unsigned int line, ...);
 
 #define log(lvl, fmt, ...)                               \
 {                                                        \
@@ -61,7 +61,7 @@ void _log (log lvl, const char *fmt, const char *file, unsigned int line, ...);
  * @param[in]  level  The level
  */
 
-void set_log_level (log level);
+void set_log_level (enum log level);
 
 /**
  * @brief      Sets the output log stream.

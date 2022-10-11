@@ -358,7 +358,13 @@ void stack_dump (stack_t *stk, FILE *stream)
     fprintf (stream, "[%c] Poison protection\n", STACK_KSP_PROTECT            ? '+' : '-');
     fprintf (stream, "\nStack data[%p]\n", stk->data);
 
-    for (size_t i = 0; i < stk->capacity; ++i)
+    #if VERBOSE_DUMP_LEVEL
+        size_t max_index = stk->capacity;
+    #else
+        size_t max_index = stk->size;
+    #endif
+
+    for (size_t i = 0; i < max_index; ++i)
     {
         fprintf (stream, "%c data[%03lu]: ", (i<stk->size ? '*' : ' '), i);
 

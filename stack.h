@@ -50,6 +50,10 @@
 #endif
 #endif
 
+#ifndef VERBOSE_DUMP_LEVEL
+#define VERBOSE_DUMP_LEVEL              0
+#endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>

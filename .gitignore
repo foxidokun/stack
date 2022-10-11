@@ -12,3 +12,4 @@ out.txt
 *.map
 *.data
 *.txt
+*.o

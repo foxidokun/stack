@@ -1,7 +1,7 @@
 #include <assert.h>
 #include "hash.h"
 
-hash_t djb2 (const void *obj, size_t obj_size)
+hash_t djb2_hash (const void *obj, size_t obj_size)
 {
     assert (obj != nullptr && "Pointer can't be null");
 

@@ -98,7 +98,7 @@ err_flags __stack_ctor (stack_t *stk, size_t obj_size, size_t capacity, elem_pri
     #endif
 
     #if STACK_HASH_PROTECT
-        stk->hash_func   = (hash_func != nullptr) ? hash_func : djb2;
+        stk->hash_func   = (hash_func != nullptr) ? hash_func : djb2_hash;
     #endif
     
     #if STACK_MEMORY_PROTECT
